@@ -1,0 +1,41 @@
+{
+  "name": "thingr",
+  "version": "1.0.0",
+  "description": "CLI for ThingRemote - Remote management for IoT devices",
+  "main": "bin/thingr.js",
+  "bin": {
+    "thingr": "bin/thingr.js"
+  },
+  "scripts": {
+    "start": "node bin/thingr.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "cli",
+    "iot",
+    "remote",
+    "management",
+    "thing",
+    "thinger"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "chalk": "^4.1.2",
+    "commander": "^12.0.0",
+    "conf": "^10.2.0",
+    "figlet": "^1.6.0",
+    "inquirer": "^8.2.5",
+    "jsonwebtoken": "^9.0.2",
+    "open": "^8.4.2",
+    "ora": "^5.4.1",
+    "ws": "^8.14.2",
+    "node-pty": "^1.0.0",
+    "term.js": "^0.0.7"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=14.16"
+  }
+}
