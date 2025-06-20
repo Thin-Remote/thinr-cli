@@ -1,13 +1,13 @@
 {
-  "name": "thingr",
+  "name": "@thinremote/thinr-cli",
   "version": "1.0.0",
-  "description": "CLI for ThingRemote - Remote management for IoT devices",
-  "main": "bin/thingr.js",
+  "description": "CLI for ThinRemote - Remote management for IoT devices",
+  "main": "bin/thinr.js",
   "bin": {
-    "thingr": "bin/thingr.js"
+    "thinr": "bin/thinr.js"
   },
   "scripts": {
-    "start": "node bin/thingr.js",
+    "start": "node bin/thinr.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -18,21 +18,19 @@
     "thing",
     "thinger"
   ],
-  "author": "",
+  "author": "ThinRemote",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.0",
-    "chalk": "^4.1.2",
-    "commander": "^12.0.0",
-    "conf": "^10.2.0",
-    "figlet": "^1.6.0",
-    "inquirer": "^8.2.5",
+    "axios": "^1.10.0",
+    "chalk": "^5.4.1",
+    "commander": "^14.0.0",
+    "conf": "^14.0.0",
+    "figlet": "^1.8.1",
+    "@inquirer/prompts": "^7.5.3",
     "jsonwebtoken": "^9.0.2",
-    "open": "^8.4.2",
-    "ora": "^5.4.1",
-    "ws": "^8.14.2",
-    "node-pty": "^1.0.0",
-    "term.js": "^0.0.7"
+    "open": "^10.1.2",
+    "ora": "^8.2.0",
+    "ws": "^8.18.2"
   },
   "type": "module",
   "engines": {
