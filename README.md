@@ -1,8 +1,8 @@
-# ThingR - ThingRemote CLI
+# Thinr - ThinRemote CLI
 
-A modern command-line interface for managing remote devices through the ThingRemote platform.
+A modern command-line interface for managing remote devices through the ThinRemote platform.
 
-![ThingR CLI](https://raw.githubusercontent.com/Thin-Remote/thinr/main/assets/thinr-cli.png)
+![Thinr CLI](https://raw.githubusercontent.com/Thin-Remote/thinr/main/assets/thinr-cli.png)
 
 ## Features
 
