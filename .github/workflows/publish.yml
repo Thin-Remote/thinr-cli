@@ -2,7 +2,7 @@ name: "publish"
 
 on:
   push:
-    branches: [ master, develop ]
+    branches: [ main, develop ]
 
 jobs:
   publish:
@@ -29,7 +29,7 @@ jobs:
 
       - name: Get tag version
         run: |
-          echo "tag_version=`awk '/^## \[[0-9]+/' CHANGELOG.md | awk 'NR==1 && -F"\[\]" {print $2}' 2>/dev/null | tail -c +2 | head -c -2`" >> $GITHUB_ENV
+          echo "tag_version=`cat package.json | jq '.version' | tr -d '"'`"  >> $GITHUB_ENV
 
       - name: Check if tag is for develop and if it already exists
         run: |
@@ -43,7 +43,7 @@ jobs:
                       break;
                   fi
               done
-          elif [ ${{ env.branch }} == 'master' ]; then
+          elif [ ${{ env.branch }} == 'main' ]; then
               echo "npm_tag_version=latest" >> $GITHUB_ENV
           elif [ `git tag --list | grep -q ${{ env.tag_version }}` -ne 0 ]; then exit 1; fi
 

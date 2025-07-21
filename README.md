@@ -1,8 +1,10 @@
 # Thinr - ThinRemote CLI
 
-A modern command-line interface for managing remote devices through the ThinRemote platform.
+<p align="center">
+  <img src='https://s3.us-east-1.amazonaws.com/thinremote.io.files/share-image.svg' alt="Thinger n8n node">
+</p>
 
-![Thinr CLI](https://raw.githubusercontent.com/Thin-Remote/thinr/main/assets/thinr-cli.png)
+A modern command-line interface for managing remote devices through the ThinRemote platform.
 
 ## Features
 
@@ -17,7 +19,7 @@ A modern command-line interface for managing remote devices through the ThinRemo
 ### From NPM (recommended)
 
 ```bash
-npm install -g thinr-cli
+npm install -g @thinremote/thinr-cli
 ```
 
 ### From Source
@@ -192,7 +194,7 @@ npm test
 ## License
 
 <a href="http://opensource.org/">
-  <img style="float: right;" width="100px" height="137px" src="/assets/OSI_Standard_Logo_0.svg">
+  <img style="float: right;" width="100px" height="137px" src="https://opensource.org/wp-content/uploads/2009/06/OSI_Standard_Logo_0.svg">
 </a>
 
 The plugin is licensed under the [MIT License](http://opensource.org/licenses/MIT):
