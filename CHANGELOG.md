@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.1] - 2025-07-21
+
+### Fixed
+
+- Fixed configuration not found error
+
 ## [1.0.0] - 2025-06-20
 
 ### Added
@@ -13,4 +19,5 @@
 - Property listing and retrieval
 - Device resource listing and execution
 
+[1.0.1]: https://github.com/Thin-Remote/thinr-cli/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/Thin-Remote/thinr-cli/tag/1.0.0
