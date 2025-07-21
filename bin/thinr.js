@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import figlet from 'figlet';
 import ora from 'ora';
-import { configExists } from '../lib/config.js';
+import { configExists, readConfig } from '../lib/config.js';
 import { authenticate } from '../lib/auth.js';
 import { deviceCommand } from '../commands/device.js';
 import { logoutCommand } from '../commands/logout.js';
