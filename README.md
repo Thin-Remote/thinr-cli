@@ -65,7 +65,7 @@ thinr device <deviceId> tls <target> [options]
 thinr device <deviceId> http <taget> [options]
 ```
 
-The target being the remote port on the device (defaults: tcp: 22, http: 80, tls: 443).
+The target being the remote address and port on the device (defaults: tcp: 22, http: 80, tls: 443, and localhost for the target address).
 
 Options:
 - `-w, --web`: Create an HTTP proxy for web interface instead of TCP
@@ -74,16 +74,13 @@ Options:
 Examples:
 ```bash
 # Create a TCP proxy to SSH
-thinr proxy RevPi20679
-
-# Create a web interface proxy
-thinr proxy RevPi20679 --web
+thinr device RevPi20679 tcp 22
 
 # Create a proxy to a specific port with SSL
-thinr proxy RevPi20679 --remote-port 8080 --ssl
+thinr device RevPi20679 http 8080
 
 # Create a proxy to a specific address
-thinr proxy RevPi20679 --remote-address 192.168.1.100
+thinr device RevPi20679 http http://192.168.1.45:8080
 ```
 
 ##### Status
@@ -91,7 +88,7 @@ thinr proxy RevPi20679 --remote-address 192.168.1.100
 Check the connection status of a device:
 
 ```bash
-thinr status <deviceId> [options]
+thinr device <deviceId> status [options]
 ```
 
 Options:
@@ -117,7 +114,7 @@ Options:
 
 ##### Resource
 
-Get the avaiable resources of a device:
+Get the available resources of a device:
 
 ```bash
 thinr device <deviceId> resource [options]

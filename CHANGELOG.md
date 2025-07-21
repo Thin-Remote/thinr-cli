@@ -5,6 +5,7 @@
 ### Fixed
 
 - Fixed import on proxy command
+- Updated commands in readme
 
 ### Removed
 
