@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.2] - 2025-07-21
+
+### Fixed
+
+- Fixed import on proxy command
+- Updated commands in readme
+
+### Removed
+
+- Removed targetSecure option from device proxy command
+- Avoid deleting token from server on logout
+
 ## [1.0.1] - 2025-07-21
 
 ### Fixed
@@ -19,5 +31,6 @@
 - Property listing and retrieval
 - Device resource listing and execution
 
+[1.0.2]: https://github.com/Thin-Remote/thinr-cli/compare/1.0.1...1.0.2
 [1.0.1]: https://github.com/Thin-Remote/thinr-cli/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/Thin-Remote/thinr-cli/tag/1.0.0
