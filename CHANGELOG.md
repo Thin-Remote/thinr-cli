@@ -2,6 +2,10 @@
 
 ## [1.0.2] - 2025-07-21
 
+### Fixed
+
+- Fixed import on proxy command
+
 ### Removed
 
 - Removed targetSecure option from device proxy command
