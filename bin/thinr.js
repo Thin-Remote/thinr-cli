@@ -28,7 +28,7 @@ const program = new Command();
 program
     .name('thinr')
     .description('CLI for ThinRemote - Remote management for IoT devices')
-    .version('1.0.0');
+    .version('1.0.2');
 
 // Register commands
 deviceCommand(program);
