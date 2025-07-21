@@ -69,7 +69,6 @@ The target being the remote port on the device (defaults: tcp: 22, http: 80, tls
 
 Options:
 - `-w, --web`: Create an HTTP proxy for web interface instead of TCP
-- `--no-secure`: Do not use SSL for the target connection
 - `--no-open`: Do not open browser automatically (web mode only)
 
 Examples:

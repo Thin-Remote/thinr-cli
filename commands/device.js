@@ -44,7 +44,6 @@ export function deviceCommand(program) {
                 port: null,
                 json: false,
                 openBrowser: true,
-                targetSecure: true,
                 inputs: {},
                 field: "",
             };
@@ -63,8 +62,6 @@ export function deviceCommand(program) {
                     parsedOptions.inputs[inputPair[0]] = inputPair[1];
                 } else if (argv[i] === '-f' || argv[i] === '--field') {
                     parsedOptions.field = argv[i + 1];
-                } else if (argv[i] === '--no-secure') {
-                    parsedOptions.targetSecure = false;
                 } else if (argv[i] === '-h' || argv[i] === '--help') {
                     printHelp(deviceId);
                     return;
@@ -252,7 +249,6 @@ Arguments:
 
 Options (for proxy commands):
   -p, --port <port>  Local port to use (default: random)
-  --no-secure        Do not use SSL/TLS for the target
   --no-open          Do not open browser (http only)
 
 Options (for status command):

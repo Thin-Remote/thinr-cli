@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.2] - 2025-07-21
+
+### Removed
+
+- Removed targetSecure option from device proxy command
+
 ## [1.0.1] - 2025-07-21
 
 ### Fixed
@@ -19,5 +25,6 @@
 - Property listing and retrieval
 - Device resource listing and execution
 
+[1.0.2]: https://github.com/Thin-Remote/thinr-cli/compare/1.0.1...1.0.2
 [1.0.1]: https://github.com/Thin-Remote/thinr-cli/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/Thin-Remote/thinr-cli/tag/1.0.0
