@@ -34,12 +34,12 @@ export function logoutCommand(program) {
                 } else {
                     spinner.fail('Failed to remove configuration.');
                     console.error(chalk.red('Error: Unable to delete configuration file. You may need to remove it manually.'));
-                    console.error(chalk.gray('Configuration is stored in ~/.thingr/config.json'));
+                    console.error(chalk.gray('Configuration is stored in ~/.config/thinr-cli/config.json'));
                 }
             } catch (error) {
                 spinner.fail('Failed to remove configuration.');
                 console.error(chalk.red(`Error: ${error.message}`));
-                console.error(chalk.gray('Configuration is stored in ~/.thingr/config.json'));
+                console.error(chalk.gray('Configuration is stored in ~/.config/thinr-cli/config.json'));
             }
         });
 }
