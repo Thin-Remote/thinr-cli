@@ -49,7 +49,7 @@ jobs:
 
       - name: update version
         run: |
-          npm version --no-git-tag-version ${{ env.tag_version }}
+          npm version --no-git-tag-version --allow-same-version ${{ env.tag_version }}
 
       - name: publish
         run: npm publish --tag ${{ env.npm_tag_version }} --access public
