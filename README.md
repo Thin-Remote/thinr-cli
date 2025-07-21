@@ -1,6 +1,8 @@
 # Thinr - ThinRemote CLI
 
-![Thinr CLI](https://s3.us-east-1.amazonaws.com/thinremote.io.files/share-image.svg)
+<p align="center">
+  <img src='https://s3.us-east-1.amazonaws.com/thinremote.io.files/share-image.svg' alt="Thinger n8n node">
+</p>
 
 A modern command-line interface for managing remote devices through the ThinRemote platform.
 
