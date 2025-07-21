@@ -21,10 +21,6 @@ export function logoutCommand(program) {
             const spinner = ora('Removing configuration...').start();
 
             try {
-                // Delete token from server first
-                spinner.text = 'Deleting token from server...';
-                await deleteToken();
-
                 // Delete local configuration
                 spinner.text = 'Removing local configuration...';
                 const success = deleteConfig();

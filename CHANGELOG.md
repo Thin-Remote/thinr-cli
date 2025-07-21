@@ -5,6 +5,7 @@
 ### Removed
 
 - Removed targetSecure option from device proxy command
+- Avoid deleting token from server on logout
 
 ## [1.0.1] - 2025-07-21
 
