@@ -4,8 +4,16 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import figlet from 'figlet';
 import ora from 'ora';
-import { configExists, readConfig } from '../lib/config.js';
+import { configExists, readConfig, setActiveProfile } from '../lib/config.js';
 import { detectJsonModeFromArgv } from '../lib/output.js';
+
+// Pick up --profile early so subsequent config reads use the right one.
+// Commander parses options later, but the config is touched before that.
+for (let i = 2; i < process.argv.length; i++) {
+    const a = process.argv[i];
+    if (a === '--profile' && process.argv[i + 1]) { setActiveProfile(process.argv[i + 1]); break; }
+    if (a.startsWith('--profile=')) { setActiveProfile(a.slice('--profile='.length)); break; }
+}
 
 // Set JSON mode before any command runs so spinners/logs can opt out.
 detectJsonModeFromArgv();
@@ -13,6 +21,7 @@ import { authenticate } from '../lib/auth.js';
 import { deviceCommand } from '../commands/device.js';
 import { logoutCommand } from '../commands/logout.js';
 import { productCommand } from "../commands/product.js";
+import { profileCommand } from '../commands/profile.js';
 import { setBaseURL } from '../lib/api.js';
 
 // Function to display the banner
@@ -32,11 +41,13 @@ const program = new Command();
 program
     .name('thinr')
     .description('CLI for ThinRemote - Remote management for IoT devices')
-    .version('1.0.2');
+    .version('1.0.2')
+    .option('--profile <name>', 'Configuration profile to use (defaults to the saved default)');
 
 // Register commands
 deviceCommand(program);
 productCommand(program);
+profileCommand(program);
 logoutCommand(program);
 
 // Handle help
