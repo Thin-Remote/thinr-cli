@@ -1,7 +1,6 @@
 import chalk from 'chalk';
 import ora from 'ora';
 import { deleteConfig, configExists } from '../lib/config.js';
-import { deleteToken } from '../lib/auth.js';
 
 /**
  * Register the logout command
@@ -29,13 +28,21 @@ export function logoutCommand(program) {
                     spinner.succeed('Logged out successfully. Configuration removed.');
                 } else {
                     spinner.fail('Failed to remove configuration.');
-                    console.error(chalk.red('Error: Unable to delete configuration file. You may need to remove it manually.'));
-                    console.error(chalk.gray('Configuration is stored in ~/.config/thinr-cli/config.json'));
+                    console.error(
+                        chalk.red(
+                            'Error: Unable to delete configuration file. You may need to remove it manually.',
+                        ),
+                    );
+                    console.error(
+                        chalk.gray('Configuration is stored in ~/.config/thinr-cli/config.json'),
+                    );
                 }
             } catch (error) {
                 spinner.fail('Failed to remove configuration.');
                 console.error(chalk.red(`Error: ${error.message}`));
-                console.error(chalk.gray('Configuration is stored in ~/.config/thinr-cli/config.json'));
+                console.error(
+                    chalk.gray('Configuration is stored in ~/.config/thinr-cli/config.json'),
+                );
             }
         });
 }
