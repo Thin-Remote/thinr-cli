@@ -57,7 +57,8 @@ program
     .description('Start MCP server for AI tool integration')
     .option('-d, --device <deviceId>', 'Default device ID')
     .action(async (options) => {
-        // Allow env vars to set defaults (used by thinr env)
+        // Forward CLI flags into env vars so the MCP server picks them up
+        // when it reads its defaults at startup.
         if (options.device) process.env.THINR_DEVICE = options.device;
         if (program.opts().user) process.env.THINR_USER = program.opts().user;
         try {

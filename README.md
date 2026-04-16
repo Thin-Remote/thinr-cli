@@ -36,8 +36,7 @@ task at hand.
   - [Starting the server](#starting-the-server)
   - [Tool catalog](#tool-catalog)
   - [Per-call controls](#per-call-controls)
-  - [`thinr device env` — one-shot Claude Code launcher](#thinr-device-env--one-shot-claude-code-launcher)
-  - [Manual integration with Claude Code](#manual-integration-with-claude-code)
+  - [Integrating with Claude Code](#integrating-with-claude-code)
 - [Profiles and multi-account use](#profiles-and-multi-account-use)
 - [Development](#development)
 - [License](#license)
@@ -88,8 +87,8 @@ These apply to every subcommand:
 | `--profile <name>` | `THINR_PROFILE` | Use a non-default profile for this invocation. |
 | `-u, --user <name>` | — | Admin impersonation: act on behalf of another user (requires admin privileges on the server). |
 | — | `THINR_INSECURE=1` | Accept self-signed TLS certificates globally. Localhost / 127.0.0.1 are always accepted; this flag extends the relaxation to any host, useful for LAN dev servers. |
-| — | `THINR_DEVICE` | Default device for the MCP server when no `device` is passed per call. Set by `thinr env`. |
-| — | `THINR_USER` | Default impersonated user for the MCP server. Set by `thinr env`. |
+| — | `THINR_DEVICE` | Default device for the MCP server when no `device` is passed per call. Equivalent to `thinr mcp -d <deviceId>`. |
+| — | `THINR_USER` | Default impersonated user for the MCP server. |
 
 ---
 
@@ -133,7 +132,7 @@ Emitted error `code` values:
 
 Spinners and progress messages are suppressed in JSON mode so the
 output is valid JSON without wrappers. Interactive commands
-(`console`, `tcp`/`tls`/`http`, `env`) accept `--json` silently but
+(`console`, `tcp`/`tls`/`http`) accept `--json` silently but
 don't change their behaviour — they don't produce a discrete result.
 `exec` buffers stdout/stderr when `--json` is set and emits a single
 envelope on exit.
@@ -268,11 +267,6 @@ Options:
 - `--channel <name>`: Update channel (default: `latest`)
 - `-j, --json`: Output as JSON
 
-#### `env`
-
-See [`thinr device env` — one-shot Claude Code launcher](#thinr-device-env--one-shot-claude-code-launcher)
-in the MCP section.
-
 ### `thinr product <action> <productId>`
 
 Fan out an operation across every device that belongs to a product.
@@ -383,40 +377,15 @@ Full input/output schemas are published via standard MCP
   call. Useful for agents that need to hop between prod and staging
   without restarting.
 
-### `thinr device env` — one-shot Claude Code launcher
+### Integrating with Claude Code
+
+Register the server once with the Claude Code CLI:
 
 ```bash
-thinr device env <deviceId> [mountpoint] [command…]
-```
+# Pinned to a single device — every tool call defaults to it
+claude mcp add thinr-<deviceId> -s user -- thinr mcp -d <deviceId>
 
-The quickest way to start using the MCP server with Claude Code.
-`thinr device env` does three things, then hands control to the
-launched command:
-
-1. Registers a per-device MCP entry in Claude Code (via
-   `claude mcp add`) if one isn't already there. The entry launches
-   `thinr mcp -d <deviceId>` so the default device is preset for that
-   session — every subsequent tool call defaults to this device
-   without the AI having to pass it on each turn.
-2. Creates a project directory (`mountpoint`, default
-   `./remote-<deviceId>`) with a tailored `CLAUDE.md` describing the
-   device and the available tools.
-3. Spawns `claude` (or the command you pass after `mountpoint`)
-   inside that directory so the new MCP server is in scope from the
-   first turn.
-
-### Manual integration with Claude Code
-
-If you'd rather wire it up yourself:
-
-```bash
-claude mcp add thinr-myserver -s user -- thinr mcp -d <deviceId>
-```
-
-Or without a default device (tool calls must pass `device`
-themselves):
-
-```bash
+# Or unscoped — tool calls must pass `device` themselves
 claude mcp add thinr -s user -- thinr mcp
 ```
 
@@ -461,7 +430,7 @@ thinr-cli/
 ├── bin/           # CLI entry point (thinr)
 ├── commands/      # Commander subcommand modules
 ├── lib/           # Core: api, auth, config, device-api, errors,
-│                  # output, mcp-server, env, proxy, console, …
+│                  # output, mcp-server, proxy, console, …
 ├── package.json
 └── README.md
 ```

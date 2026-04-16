@@ -10,7 +10,6 @@ import {
     formatDeviceProperties,
 } from '../lib/property.js';
 import { createDeviceAPI } from '../lib/device-api.js';
-import { launchEnv } from '../lib/env.js';
 import { configExists } from '../lib/config.js';
 import {
     callDeviceResource,
@@ -355,26 +354,5 @@ export function deviceCommand(program) {
         .option('-j, --json', 'Output as JSON')
         .option('--channel <name>', 'Update channel (default: latest)')
         .action((deviceId, opts, cmd) => runUpdate('apply', deviceId, opts, cmd));
-
-    // ─── Env ───────────────────────────────────────────────────────────────
-    device
-        .command('env <deviceId> [mountpoint] [command...]')
-        .description('Launch a Claude Code session scoped to this device')
-        .action(async (deviceId, mountpoint, command, _opts, cmd) => {
-            ensureConfigured();
-            const user = getGlobalUser(cmd);
-            try {
-                const exitCode = await launchEnv(
-                    deviceId,
-                    mountpoint || `./remote-${deviceId}`,
-                    command || [],
-                    { user },
-                );
-                process.exit(exitCode);
-            } catch (error) {
-                console.error(chalk.red(`Error: ${error.message}`));
-                process.exit(1);
-            }
-        });
 
 }
