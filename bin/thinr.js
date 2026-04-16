@@ -5,6 +5,10 @@ import chalk from 'chalk';
 import figlet from 'figlet';
 import ora from 'ora';
 import { configExists, readConfig } from '../lib/config.js';
+import { detectJsonModeFromArgv } from '../lib/output.js';
+
+// Set JSON mode before any command runs so spinners/logs can opt out.
+detectJsonModeFromArgv();
 import { authenticate } from '../lib/auth.js';
 import { deviceCommand } from '../commands/device.js';
 import { logoutCommand } from '../commands/logout.js';
