@@ -37,7 +37,7 @@ task at hand.
   - [Starting the server](#starting-the-server)
   - [Tool catalog](#tool-catalog)
   - [Per-call controls](#per-call-controls)
-  - [`thinr env` — one-shot Claude Code launcher](#thinr-env--one-shot-claude-code-launcher)
+  - [`thinr device env` — one-shot Claude Code launcher](#thinr-device-env--one-shot-claude-code-launcher)
   - [Manual integration with Claude Code](#manual-integration-with-claude-code)
 - [Profiles and multi-account use](#profiles-and-multi-account-use)
 - [Development](#development)
@@ -263,7 +263,7 @@ Options:
 
 #### `env`
 
-See [`thinr env` — one-shot Claude Code launcher](#thinr-env--one-shot-claude-code-launcher)
+See [`thinr device env` — one-shot Claude Code launcher](#thinr-device-env--one-shot-claude-code-launcher)
 in the MCP section.
 
 ### `thinr product <action> <productId>`
@@ -376,27 +376,27 @@ Full input/output schemas are published via standard MCP
   call. Useful for agents that need to hop between prod and staging
   without restarting.
 
-### `thinr env` — one-shot Claude Code launcher
+### `thinr device env` — one-shot Claude Code launcher
 
 ```bash
-thinr env <deviceId> [mountpoint] [command…]
+thinr device env <deviceId> [mountpoint] [command…]
 ```
 
 The quickest way to start using the MCP server with Claude Code.
-`thinr env` does three things, then hands control to the launched
-command:
+`thinr device env` does three things, then hands control to the
+launched command:
 
 1. Registers a per-device MCP entry in Claude Code (via
    `claude mcp add`) if one isn't already there. The entry launches
-   `thinr mcp -d <deviceId>` so the default device is preset.
+   `thinr mcp -d <deviceId>` so the default device is preset for that
+   session — every subsequent tool call defaults to this device
+   without the AI having to pass it on each turn.
 2. Creates a project directory (`mountpoint`, default
    `./remote-<deviceId>`) with a tailored `CLAUDE.md` describing the
    device and the available tools.
-3. Spawns `claude` (or the command you pass) inside that directory so
-   the new MCP server is in scope from the first turn.
-
-Equivalent shortcut inside the `device` namespace: `thinr device env
-<deviceId> [mountpoint] [command…]`.
+3. Spawns `claude` (or the command you pass after `mountpoint`)
+   inside that directory so the new MCP server is in scope from the
+   first turn.
 
 ### Manual integration with Claude Code
 
