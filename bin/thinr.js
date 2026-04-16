@@ -1,11 +1,21 @@
 #!/usr/bin/env node
 
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 import { Command } from 'commander';
 import chalk from 'chalk';
 import figlet from 'figlet';
 import ora from 'ora';
 import { configExists, readConfig, setActiveProfile } from '../lib/config.js';
 import { detectJsonModeFromArgv } from '../lib/output.js';
+
+// Single source of truth for the version: package.json. Avoids the drift
+// between `package.json#version` and a hardcoded string in this file.
+const pkg = JSON.parse(readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), '../package.json'),
+    'utf8',
+));
 
 // Pick up --profile early so subsequent config reads use the right one.
 // Commander parses options later, but the config is touched before that.
@@ -42,7 +52,7 @@ const program = new Command();
 program
     .name('thinr')
     .description('CLI for ThinRemote - Remote management for IoT devices')
-    .version('1.0.2')
+    .version(pkg.version)
     .option('-u, --user <username>', 'API user override (admin impersonation)')
     .option('--profile <name>', 'Configuration profile to use (defaults to the saved default)');
 
