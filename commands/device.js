@@ -11,7 +11,6 @@ import {
 } from '../lib/property.js';
 import { createDeviceAPI } from '../lib/device-api.js';
 import { launchEnv } from '../lib/env.js';
-import { startMCPServer } from '../lib/mcp-server.js';
 import { configExists } from '../lib/config.js';
 import {
     callDeviceResource,
@@ -377,18 +376,4 @@ export function deviceCommand(program) {
             }
         });
 
-    // ─── MCP ───────────────────────────────────────────────────────────────
-    device
-        .command('mcp <deviceId>')
-        .description('Start a device-scoped MCP server')
-        .action(async (deviceId, _opts, cmd) => {
-            ensureConfigured();
-            const user = getGlobalUser(cmd);
-            try {
-                await startMCPServer(deviceId, { user });
-            } catch (error) {
-                console.error(chalk.red(`Error: ${error.message}`));
-                process.exit(1);
-            }
-        });
 }

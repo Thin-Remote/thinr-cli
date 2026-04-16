@@ -266,11 +266,6 @@ Options:
 See [`thinr env` — one-shot Claude Code launcher](#thinr-env--one-shot-claude-code-launcher)
 in the MCP section.
 
-#### `mcp`
-
-Start a device-scoped MCP server (equivalent to `thinr mcp -d
-<deviceId>`). See [Part 2 — MCP server](#part-2--mcp-server).
-
 ### `thinr product <action> <productId>`
 
 Fan out an operation across every device that belongs to a product.
