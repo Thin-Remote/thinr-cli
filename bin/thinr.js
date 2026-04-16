@@ -68,7 +68,7 @@ program
     .description('Start the MCP server (stdio) for AI tool integration')
     .action(async () => {
         try {
-            await startMCPServer();
+            await startMCPServer({ version: pkg.version });
         } catch (error) {
             console.error(`Error: ${error.message}`);
             process.exit(1);
