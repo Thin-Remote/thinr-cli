@@ -2,8 +2,9 @@ import { configExists } from "../lib/config.js";
 import chalk from "chalk";
 import ora from "ora";
 import { formatDeviceProperty, getDeviceProperty } from "../lib/property.js";
-import { executeDeviceResource } from "../lib/resource.js";
+import { callDeviceResource } from "../lib/resource.js";
 import { filterActiveDevices, getDevices } from "../lib/device.js";
+import { isJsonMode, printOk, printErr, createSpinner, classifyError } from "../lib/output.js";
 
 /**
  * Register the product command with all product related functionality.
@@ -27,8 +28,7 @@ export function productCommand(program) {
 
             // Check if configured
             if (!configExists()) {
-                console.error(chalk.red('Error: Not configured. Run thinr without parameters to set up.'));
-                process.exit(1);
+                printErr('Not configured. Run thinr without parameters to set up.', { code: 'not_configured' });
             }
 
             // If no action provided, show help
@@ -67,7 +67,7 @@ export function productCommand(program) {
             }
 
             let devices = [];
-            const spinner = ora(`Retrieving devices for product ${productId}...`).start();
+            const spinner = createSpinner(`Retrieving devices for product ${productId}...`).start();
             try {
                 let filter = {
                     productId: productId,
@@ -79,86 +79,81 @@ export function productCommand(program) {
                 spinner.succeed(`Devices for product ${productId} retrieved successfully`);
             } catch (e) {
                 spinner.fail(`Failed to retrieve devices for product ${productId}`);
-                process.exit(1);
+                const { message, code } = classifyError(e);
+                printErr(message, { code });
             }
 
             switch (action.toLowerCase()) {
 
                 case 'property': {
-
-                    //const spinner = ora(`Retrieving property ${target} for devices belonging to the product ${productId}...`).start();
-
-                    if ( ! parsedOptions.allDevices ) {
+                    if (!parsedOptions.allDevices) {
                         devices = filterActiveDevices(devices);
                     }
-
-                    try {
-                        for (const device of devices) {
-                            try {
-                                const property = await getDeviceProperty(device.device, target);
+                    const results = [];
+                    for (const device of devices) {
+                        try {
+                            const property = await getDeviceProperty(device.device, target);
+                            const value = parsedOptions.field
+                                ? parsedOptions.field.split('.').reduce((obj, key) => obj && obj[key], property)
+                                : property;
+                            results.push({ device: device.device, ok: true, data: value });
+                            if (!isJsonMode()) {
                                 console.log('Device', chalk.blue(device.device), 'property', chalk.blue(target));
-
-                                if (parsedOptions.json) {
-                                    if ( parsedOptions.field ) {
-                                        console.log(parsedOptions.field.split('.').reduce((obj, key) => obj && obj[key], property));
-                                    } else {
-                                        console.log(JSON.stringify(property, null, 2));
-                                    }
+                                if (parsedOptions.field) {
+                                    console.log(value);
                                 } else {
                                     console.log(formatDeviceProperty(device.device, target, property));
                                 }
-                            } catch (e) {
+                            }
+                        } catch (e) {
+                            const { message, code } = classifyError(e);
+                            results.push({ device: device.device, ok: false, error: { message, code } });
+                            if (!isJsonMode()) {
                                 console.error(chalk.red(`Error retrieving property ${target} for device ${device.device}: ${e.message}`));
                             }
                         }
-                        //spinner.succeed(`Property ${target} for devices belonging to product ${productId} found`);
-                    } catch (error) {
-                        spinner.fail(`Property retrieval failed`);
-                        console.error(chalk.red(`Error: ${error.message}`));
-                        process.exit(1);
+                    }
+                    if (isJsonMode()) {
+                        printOk({ product: productId, property: target, results });
                     }
                     break;
                 }
 
                 case 'resource': {
-
-                    //const spinner = ora(`Executing resource ${target} for devices belonging to the product ${productId}...`).start();
-
-                    // Obviously, we can only execute resources on active devices
                     devices = filterActiveDevices(devices);
-
-                    try {
-                        for (const device of devices) {
-                            try {
-                                const result = await executeDeviceResource(device.device, target, parsedOptions.inputs);
+                    const results = [];
+                    for (const device of devices) {
+                        try {
+                            const result = await callDeviceResource(device.device, target, parsedOptions.inputs);
+                            const value = parsedOptions.field
+                                ? parsedOptions.field.split('.').reduce((obj, key) => obj && obj[key], result)
+                                : result;
+                            results.push({ device: device.device, ok: true, data: value });
+                            if (!isJsonMode()) {
                                 console.log('Device', chalk.blue(device.device), 'resource', chalk.blue(target));
-                                if ( parsedOptions.field ) {
-                                    console.log(parsedOptions.field.split('.').reduce((obj, key) => obj && obj[key], result));
-                                } else {
-                                    console.log(result);
-                                }
-                            } catch (e) {
-                                console.error(chalk.red(`Error retrieving property ${target} for device ${device.device}: ${e.message}`));
+                                console.log(value);
+                            }
+                        } catch (e) {
+                            const { message, code } = classifyError(e);
+                            results.push({ device: device.device, ok: false, error: { message, code } });
+                            if (!isJsonMode()) {
+                                console.error(chalk.red(`Error executing resource ${target} for device ${device.device}: ${e.message}`));
                             }
                         }
-                        //spinner.succeed(`Resource ${target} executed successfully for devices belonging to product ${productId}`);
-
-
-                    } catch (error) {
-                        spinner.fail(`Resource execution failed`);
-                        console.error(chalk.red(`Error: ${error.message}`));
-                        process.exit(1);
                     }
-
+                    if (isJsonMode()) {
+                        printOk({ product: productId, resource: target, results });
+                    }
                     break;
-
                 }
 
                 default:
+                    if (isJsonMode()) {
+                        printErr(`Unknown action '${action}'. Available actions: property, resource.`, { code: 'input_error' });
+                    }
                     console.error(chalk.red(`Error: Unknown action '${action}'. Available actions: property, resource.\n`));
                     printHelp(productId);
                     process.exit(1);
-
             }
         });
 }

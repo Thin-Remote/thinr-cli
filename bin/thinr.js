@@ -18,7 +18,7 @@ for (let i = 2; i < process.argv.length; i++) {
 // Set JSON mode before any command runs so spinners/logs can opt out.
 detectJsonModeFromArgv();
 import { authenticate } from '../lib/auth.js';
-import { deviceCommand } from '../commands/device.js';
+import { deviceCommand, devicesCommand } from '../commands/device.js';
 import { logoutCommand } from '../commands/logout.js';
 import { productCommand } from "../commands/product.js";
 import { profileCommand } from '../commands/profile.js';
@@ -43,10 +43,12 @@ program
     .name('thinr')
     .description('CLI for ThinRemote - Remote management for IoT devices')
     .version('1.0.2')
+    .option('-u, --user <username>', 'API user override (admin impersonation)')
     .option('--profile <name>', 'Configuration profile to use (defaults to the saved default)');
 
 // Register commands
 deviceCommand(program);
+devicesCommand(program);
 productCommand(program);
 profileCommand(program);
 logoutCommand(program);

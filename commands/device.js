@@ -2,11 +2,54 @@ import { handleProxyAction } from '../lib/proxy.js';
 import { connectToDeviceConsole } from '../lib/console.js';
 import { getDeviceStatus, formatDeviceStatus } from '../lib/status.js';
 import { formatDeviceProperty, getDeviceProperty, getDeviceProperties, formatDeviceProperties } from '../lib/property.js';
+import { createDeviceAPI } from '../lib/device-api.js';
+import { launchEnv } from '../lib/env.js';
+import { startMCPServer } from '../lib/mcp-server.js';
 import chalk from 'chalk';
 import ora from 'ora';
 import { configExists } from '../lib/config.js';
-import { getDeviceResources, executeDeviceResource, formatDeviceResources } from "../lib/resource.js";
+import { callDeviceResource, listDeviceResourcesWithSchemas, formatDeviceResourcesWithSchemas } from "../lib/resource.js";
+import { getDevices } from '../lib/device.js';
+import { setJsonMode, isJsonMode, printOk, printErr, createSpinner, classifyError } from '../lib/output.js';
 
+
+/**
+ * Register the devices list command
+ * @param {Command} program - Commander program instance
+ */
+export function devicesCommand(program) {
+    program
+        .command('devices')
+        .description('List all devices')
+        .option('-j, --json', 'Output as JSON')
+        .action(async (options) => {
+            if (options.json) setJsonMode(true);
+            if (!configExists()) {
+                printErr('Not configured. Run thinr without parameters to set up.', { code: 'not_configured' });
+            }
+
+            const globalOpts = program.opts();
+            const spinner = createSpinner('Fetching devices...').start();
+            try {
+                const devices = await getDevices({}, globalOpts.user);
+                spinner.succeed(`Found ${devices.length} device(s)`);
+
+                if (isJsonMode()) {
+                    printOk(devices);
+                } else {
+                    for (const d of devices) {
+                        const online = d.connection?.active ? chalk.green('online ') : chalk.gray('offline');
+                        const name = d.name ? chalk.gray(` (${d.name})`) : '';
+                        console.log(`  ${online}  ${chalk.bold(d.device)}${name}`);
+                    }
+                }
+            } catch (error) {
+                spinner.fail('Failed to list devices');
+                const { message, code } = classifyError(error);
+                printErr(message, { code });
+            }
+        });
+}
 
 /**
  * Register the device command with all device-related subcommands
@@ -25,19 +68,19 @@ export function deviceCommand(program) {
             // Get additional arguments manually
             const args = command.args.slice(1); // Skip deviceId
             const action = args[0];
-            const target = args[1] && !args[1].startsWith('-') ? args[1] : null; // Check if target is provided, skip if it's an option
+            const target = args[1] && !args[1].startsWith('-') ? args[1] : null;
 
-            // Check if configured
             if (!configExists()) {
-                console.error(chalk.red('Error: Not configured. Run thinr without parameters to set up.'));
-                process.exit(1);
+                printErr('Not configured. Run thinr without parameters to set up.', { code: 'not_configured' });
             }
 
-            // If no action provided, show help
             if (!action) {
                 printHelp(deviceId);
                 return;
             }
+
+            // Get global --user option
+            const globalUser = program.opts().user || null;
 
             // Parse options manually from process.argv
             const parsedOptions = {
@@ -46,6 +89,9 @@ export function deviceCommand(program) {
                 openBrowser: true,
                 inputs: {},
                 field: "",
+                user: globalUser,
+                legacy: false,
+                channel: null,
             };
 
             const argv = process.argv;
@@ -62,6 +108,14 @@ export function deviceCommand(program) {
                     parsedOptions.inputs[inputPair[0]] = inputPair[1];
                 } else if (argv[i] === '-f' || argv[i] === '--field') {
                     parsedOptions.field = argv[i + 1];
+                } else if (argv[i] === '-u' || argv[i] === '--user') {
+                    parsedOptions.user = argv[i + 1];
+                    i++;
+                } else if (argv[i] === '--legacy') {
+                    parsedOptions.legacy = true;
+                } else if (argv[i] === '--channel') {
+                    parsedOptions.channel = argv[i + 1];
+                    i++;
                 } else if (argv[i] === '-h' || argv[i] === '--help') {
                     printHelp(deviceId);
                     return;
@@ -91,115 +145,244 @@ export function deviceCommand(program) {
                     break;
                 
                 case 'status': {
-                    const spinner = ora(`Checking status of ${deviceId}...`).start();
+                    const spinner = createSpinner(`Checking status of ${deviceId}...`).start();
                     try {
                         const status = await getDeviceStatus(deviceId);
                         spinner.succeed(`Device ${deviceId} found`);
-
-                        if (parsedOptions.json) {
-                            console.log(JSON.stringify(status, null, 2));
+                        if (isJsonMode()) {
+                            printOk(status);
                         } else {
                             console.log(formatDeviceStatus(deviceId, status));
                         }
                     } catch (error) {
                         spinner.fail(`Status check failed`);
-                        console.error(chalk.red(`Error: ${error.message}`));
-                        process.exit(1);
+                        const { message, code } = classifyError(error);
+                        printErr(message, { code });
                     }
                     break;
                 }
 
                 case 'property': {
-
-                    if ( !target ) {
-                        const spinner = ora(`Getting properties for ${deviceId}...`).start();
+                    if (!target) {
+                        const spinner = createSpinner(`Getting properties for ${deviceId}...`).start();
                         try {
                             const result = await getDeviceProperties(deviceId);
                             spinner.succeed(`Properties for ${deviceId} retrieved successfully`);
-                            if (parsedOptions.json) {
-                                console.log(result);
+                            if (isJsonMode()) {
+                                printOk(result);
                             } else {
                                 console.log(chalk.green(`Resource result for device ${deviceId}:`));
                                 console.log(formatDeviceProperties(deviceId, result));
                             }
                         } catch (error) {
                             spinner.fail(`Property retrieval failed`);
-                            console.error(chalk.red(`Error: ${error.message}`));
-                            process.exit(1);
+                            const { message, code } = classifyError(error);
+                            printErr(message, { code });
                         }
                     } else {
-                        const spinner = ora(`Retrieving property for ${deviceId}...`).start();
+                        const spinner = createSpinner(`Retrieving property for ${deviceId}...`).start();
                         try {
                             const property = await getDeviceProperty(deviceId, target);
                             spinner.succeed(`Property ${target} for ${deviceId} found`);
-
-                            if (parsedOptions.json) {
-                                if ( parsedOptions.field ) {
-                                    console.log(parsedOptions.field.split('.').reduce((obj, key) => obj && obj[key], property));
-                                } else {
-                                    console.log(JSON.stringify(property, null, 2));
-                                }
+                            const value = parsedOptions.field
+                                ? parsedOptions.field.split('.').reduce((obj, key) => obj && obj[key], property)
+                                : property;
+                            if (isJsonMode()) {
+                                printOk(value);
+                            } else if (parsedOptions.field) {
+                                console.log(value);
                             } else {
                                 console.log(formatDeviceProperty(deviceId, target, property));
                             }
                         } catch (error) {
                             spinner.fail(`Property retrieval failed`);
-                            console.error(chalk.red(`Error: ${error.message}`));
-                            process.exit(1);
+                            const { message, code } = classifyError(error);
+                            printErr(message, { code });
                         }
-
                     }
-
                     break;
                 }
 
                 case 'resource': {
-
                     if (!target) {
-                        const spinner = ora(`Getting resources for ${deviceId}...`).start();
+                        const spinner = createSpinner(`Getting resources for ${deviceId}...`).start();
                         try {
-
-                            const result = await getDeviceResources(deviceId);
+                            const entries = await listDeviceResourcesWithSchemas(deviceId);
                             spinner.succeed(`Succesfully retrieved resources for ${deviceId}`);
-
-                            if (parsedOptions.json) {
-                                console.log(result);
+                            if (isJsonMode()) {
+                                printOk(entries);
                             } else {
-                                //console.log(chalk.green(`Resource ${target} result for device ${deviceId}:`));
-                                console.log(chalk.green(`Resource result for device ${deviceId}:`));
-                                console.log(formatDeviceResources(deviceId, result));
+                                console.log(formatDeviceResourcesWithSchemas(deviceId, entries));
                             }
                         } catch (error) {
                             spinner.fail(`Resource retrieval failed`);
-                            console.error(chalk.red(`Error: ${error.message}`));
-                            process.exit(1);
+                            const { message, code } = classifyError(error);
+                            printErr(message, { code });
                         }
-
                     } else {
-                        const spinner = ora(`Executing resource ${target} for ${deviceId}...`).start();
+                        const spinner = createSpinner(`Calling resource ${target} for ${deviceId}...`).start();
                         try {
-
-                            const result = await executeDeviceResource(deviceId, target, parsedOptions.inputs);
-                            spinner.succeed(`Resource ${target} executed successfully for ${deviceId}`);
-
-                            if ( parsedOptions.field ) {
-                                console.log(parsedOptions.field.split('.').reduce((obj, key) => obj && obj[key], result));
+                            const result = await callDeviceResource(deviceId, target, parsedOptions.inputs);
+                            spinner.succeed(`Resource ${target} returned successfully for ${deviceId}`);
+                            const value = parsedOptions.field
+                                ? parsedOptions.field.split('.').reduce((obj, key) => obj && obj[key], result)
+                                : result;
+                            if (isJsonMode()) {
+                                printOk(value);
                             } else {
-                                console.log(result);
+                                console.log(value);
                             }
-
                         } catch (error) {
-                            spinner.fail(`Resource execution failed`);
-                            console.error(chalk.red(`Error: ${error.message}`));
-                            process.exit(1);
+                            spinner.fail(`Resource call failed`);
+                            const { message, code } = classifyError(error);
+                            printErr(message, { code });
                         }
                     }
+                    break;
+                }
 
+                case 'exec': {
+                    // Drop CLI flags that may have leaked into the positional
+                    // args (commander forwards unknown options when both
+                    // allowUnknownOption and allowExcessArguments are set).
+                    const cmdArgs = args
+                        .slice(1)
+                        .filter(a => a !== '--legacy' && a !== '--json' && a !== '-j')
+                        .join(' ');
+                    if (!cmdArgs) {
+                        if (isJsonMode()) {
+                            printErr('No command provided.', { code: 'input_error' });
+                        }
+                        console.error(chalk.red('Error: No command provided.'));
+                        console.log(`Usage: thinr device ${deviceId} exec "ls -la"`);
+                        process.exit(1);
+                    }
+                    try {
+                        const api = createDeviceAPI(deviceId, { user: parsedOptions.user });
+                        if (isJsonMode()) {
+                            // Buffer stdout/stderr so we can emit a single JSON
+                            // envelope at the end. Forces the non-streaming
+                            // behaviour scripts actually want.
+                            let stdout = '';
+                            let stderr = '';
+                            const { exitCode, timedOut, cancelled } = await api.execStream(cmdArgs, {
+                                onStdout: (s) => { stdout += s; },
+                                onStderr: (s) => { stderr += s; },
+                            });
+                            if (cancelled) {
+                                printErr('Interrupted', { code: 'cancelled', exitCode: 130 });
+                            }
+                            if (timedOut) {
+                                printErr('Command timed out on the device', { code: 'timeout' });
+                            }
+                            printOk({ stdout, stderr, exitCode: exitCode ?? null });
+                            process.exit(exitCode ?? 1);
+                        }
+                        if (parsedOptions.legacy) {
+                            // One-shot path for older devices without the
+                            // streaming cmd resource. Buffers stdout/stderr
+                            // server-side and returns the full result at the end.
+                            const result = await api.exec(cmdArgs, 120);
+                            if (result.stdout) process.stdout.write(result.stdout);
+                            if (result.stderr) process.stderr.write(result.stderr);
+                            process.exit(result.retcode || 0);
+                        }
+                        let cancelFn = null;
+                        const onSigint = () => cancelFn?.();
+                        process.on('SIGINT', onSigint);
+                        const { exitCode, timedOut, cancelled } = await api.execStream(cmdArgs, {
+                            onStdout: (s) => process.stdout.write(s),
+                            onStderr: (s) => process.stderr.write(s),
+                            onCancel: (fn) => { cancelFn = fn; },
+                            stdin: process.stdin,
+                        });
+                        process.off('SIGINT', onSigint);
+                        if (timedOut) {
+                            console.error(chalk.red('\nError: command timed out on the device.'));
+                        }
+                        if (cancelled) {
+                            console.error(chalk.yellow('\n[interrupted]'));
+                            process.exit(130);
+                        }
+                        process.exit(exitCode ?? 1);
+                    } catch (error) {
+                        const { message, code } = classifyError(error);
+                        if (isJsonMode()) {
+                            printErr(message, { code });
+                        }
+                        console.error(chalk.red(`Error: ${message}`));
+                        if (error.response) {
+                            console.error(chalk.red(`Status: ${error.response.status}`));
+                            console.error(chalk.red(`Body: ${JSON.stringify(error.response.data)}`));
+                        }
+                        process.exit(1);
+                    }
+                    break;
+                }
+
+                case 'update': {
+                    const sub = (target || '').toLowerCase();
+                    if (sub !== 'check' && sub !== 'apply') {
+                        if (isJsonMode()) {
+                            printErr("update requires 'check' or 'apply'", { code: 'input_error' });
+                        }
+                        console.error(chalk.red(`Error: update requires 'check' or 'apply'.`));
+                        console.log(`Usage: thinr device ${deviceId} update check`);
+                        console.log(`       thinr device ${deviceId} update apply [--channel <name>]`);
+                        process.exit(1);
+                    }
+                    const channel = parsedOptions.channel || 'latest';
+                    const label = sub === 'check' ? 'Checking for updates' : 'Applying update';
+                    const spinner = createSpinner(`${label} on ${deviceId}...`).start();
+                    try {
+                        const api = createDeviceAPI(deviceId, { user: parsedOptions.user });
+                        const timeout = sub === 'apply' ? 300000 : 30000;
+                        const result = await api.callResource('update', { action: sub, channel }, { timeout });
+                        spinner.succeed(`${label} finished`);
+                        if (isJsonMode()) {
+                            printOk(result);
+                        } else if (result && typeof result === 'object') {
+                            if (result.current) console.log(`  current: ${chalk.bold(result.current)}`);
+                            if (result.latest)  console.log(`  latest:  ${chalk.bold(result.latest)}`);
+                            if (result.arch)    console.log(`  arch:    ${result.arch}`);
+                            if (result.status)  console.log(`  status:  ${chalk.cyan(result.status)}`);
+                            if (result.message) console.log(`  message: ${result.message}`);
+                        } else {
+                            console.log(result);
+                        }
+                    } catch (error) {
+                        spinner.fail(`${label} failed`);
+                        const { message, code } = classifyError(error);
+                        printErr(message, { code });
+                    }
+                    break;
+                }
+
+                case 'env': {
+                    const envMountpoint = args[1] || `./remote-${deviceId}`;
+                    const envCommand = args.slice(2);
+                    try {
+                        const exitCode = await launchEnv(deviceId, envMountpoint, envCommand, { user: parsedOptions.user });
+                        process.exit(exitCode);
+                    } catch (error) {
+                        console.error(chalk.red(`Error: ${error.message}`));
+                        process.exit(1);
+                    }
+                    break;
+                }
+
+                case 'mcp': {
+                    try {
+                        await startMCPServer(deviceId, { user: parsedOptions.user });
+                    } catch (error) {
+                        console.error(chalk.red(`Error: ${error.message}`));
+                        process.exit(1);
+                    }
                     break;
                 }
 
                 default:
-                    console.error(chalk.red(`Error: Unknown action '${action}'. Available actions: tcp, tls, http, console, status, property, resource.\n`));
+                    console.error(chalk.red(`Error: Unknown action '${action}'. Available actions: tcp, tls, http, console, status, property, resource, exec, env, mcp, update.\n`));
                     printHelp(deviceId);
                     process.exit(1);
             }
@@ -238,6 +421,19 @@ Available commands for device "${deviceId}":
   resource [resource]           Execute a specific resource of the device
                                 Example: thinr device ${deviceId} resource reboot
 
+  exec <command>                Execute a command on the remote device
+                                Example: thinr device ${deviceId} exec "ls -la"
+
+  env [path] [command]          Launch a remote environment (FUSE + remote shell)
+                                Example: thinr device ${deviceId} env ~/remoto claude
+                                Example: thinr device ${deviceId} env ~/remoto
+
+  update check                  Check if an agent update is available
+                                Example: thinr device ${deviceId} update check
+
+  update apply [--channel <c>]  Apply an agent update (default channel: latest)
+                                Example: thinr device ${deviceId} update apply
+
 Arguments:
 
   target                        Target for proxy commands (address:port, port, or address)
@@ -253,15 +449,27 @@ Options (for proxy commands):
 
 Options (for status command):
   -j, --json         Output as JSON
-  
+
 Options (for property command):
   -j, --json         Output as JSON
   -f, --field <field>          Field to extract from the property (e.g., -f data.value)
-    
+
 Options (for resource command):
   -i, --input <input>=<value>  Input for the resource (e.g., -i param1=value1 -i param2=value2)
   -j, --json         Output as JSON
   -f, --field <field>          Field to extract from the property (e.g., -f data.value)
+
+Options (for exec command):
+  -j, --json                   Buffer stdout/stderr and emit a single JSON envelope at exit
+  --legacy                     Use the non-streaming one-shot API (older agents)
+
+Options (for update command):
+  --channel <name>             Update channel (default: latest)
+  -j, --json                   Output as JSON
+
+All data-producing commands emit a common envelope in JSON mode:
+  success: { "ok": true, "data": ... }
+  failure: { "ok": false, "error": { "message": "...", "code": "..." } }
 
 Use "thinr device ${deviceId} <command> --help" for more details on each command.`);
 
