@@ -1,18 +1,47 @@
-# Thinr - ThinRemote CLI
+# Thinr — ThinRemote CLI
 
 <p align="center">
-  <img src='https://s3.us-east-1.amazonaws.com/thinremote.io.files/share-image.svg' alt="Thinger n8n node">
+  <img src='https://s3.us-east-1.amazonaws.com/thinremote.io.files/share-image.svg' alt="Thinger">
 </p>
 
-A modern command-line interface for managing remote devices through the ThinRemote platform.
+A command-line tool for managing remote IoT devices on the ThinRemote
+platform, and an MCP server that lets AI assistants drive those
+devices programmatically.
 
-## Features
+Two operating modes:
 
-- **Remote Terminal**: Connect to a device's terminal and interact with it directly
-- **TCP/Web Proxy**: Create proxies to remote devices, either for TCP connections or web interfaces
-- **Device Status**: Check connection status and statistics for a device
-- **Secure Authentication**: Support for both username/password and token-based authentication
-- **Modern UI**: Clean and intuitive command-line interface
+- **CLI** — interactive or scripted device management from a shell.
+- **MCP server** — a stdio [Model Context Protocol][mcp] server that
+  exposes the same operations as typed tools for AI clients like
+  Claude Code.
+
+Both modes share the same auth, profiles, and device API layer, so
+you configure the tool once and use it in whichever mode fits the
+task at hand.
+
+[mcp]: https://modelcontextprotocol.io/
+
+## Table of contents
+
+- [Installation](#installation)
+- [Initial setup](#initial-setup)
+- [Global options and environment variables](#global-options-and-environment-variables)
+- [Part 1 — CLI](#part-1--cli)
+  - [JSON output](#json-output)
+  - [`thinr devices`](#thinr-devices)
+  - [`thinr device <action> <deviceId>`](#thinr-device-action-deviceid)
+  - [`thinr product <action> <productId>`](#thinr-product-action-productid)
+  - [`thinr profile`](#thinr-profile)
+  - [`thinr logout`](#thinr-logout)
+- [Part 2 — MCP server](#part-2--mcp-server)
+  - [Starting the server](#starting-the-server)
+  - [Tool catalog](#tool-catalog)
+  - [Per-call controls](#per-call-controls)
+  - [`thinr env` — one-shot Claude Code launcher](#thinr-env--one-shot-claude-code-launcher)
+  - [Manual integration with Claude Code](#manual-integration-with-claude-code)
+- [Profiles and multi-account use](#profiles-and-multi-account-use)
+- [Development](#development)
+- [License](#license)
 
 ## Installation
 
@@ -22,7 +51,7 @@ A modern command-line interface for managing remote devices through the ThinRemo
 npm install -g @thinremote/thinr-cli
 ```
 
-### From Source
+### From source
 
 ```bash
 git clone https://github.com/Thin-Remote/thinr-cli.git
@@ -31,17 +60,50 @@ npm install
 npm link
 ```
 
-## Usage
+Requires Node.js ≥ 14.16.
 
-### Initial Setup
+## Initial setup
 
-Run the CLI without any parameters to set up:
+Run the CLI once with no arguments to authenticate:
 
 ```bash
 thinr
 ```
 
-You'll be prompted to authenticate either with username/password or with an existing token.
+You'll be prompted for the ThinRemote server, and can authenticate
+with either username/password (OAuth 2.0 device flow) or a pre-issued
+token. On success a profile is created at
+`~/.config/thinr-cli/config.json`, named after the server hostname,
+and marked as the default.
+
+Every later command reads that profile automatically. Logging into a
+second server creates a second profile side-by-side; see
+[Profiles and multi-account use](#profiles-and-multi-account-use).
+
+## Global options and environment variables
+
+These apply to every subcommand:
+
+| Flag | Env var | Meaning |
+| --- | --- | --- |
+| `--profile <name>` | `THINR_PROFILE` | Use a non-default profile for this invocation. |
+| `-u, --user <name>` | — | Admin impersonation: act on behalf of another user (requires admin privileges on the server). |
+| — | `THINR_INSECURE=1` | Accept self-signed TLS certificates globally. Localhost / 127.0.0.1 are always accepted; this flag extends the relaxation to any host, useful for LAN dev servers. |
+| — | `THINR_DEVICE` | Default device for the MCP server when no `device` is passed per call. Set by `thinr env`. |
+| — | `THINR_USER` | Default impersonated user for the MCP server. Set by `thinr env`. |
+
+---
+
+## Part 1 — CLI
+
+All device- and product-scoped actions follow a **subcommand-first**
+shape: the action comes before the target id, matching patterns like
+`kubectl describe pod <name>` or `git remote add <name> <url>`.
+
+```
+thinr device <action>  <deviceId>  [args…] [options]
+thinr product <action> <productId> [args…] [options]
+```
 
 ### JSON output
 
@@ -56,55 +118,52 @@ envelope to stdout so scripts can pipe it to `jq`:
 Process exit codes always reflect success (`0`) or failure (non-zero),
 independently of the envelope.
 
-Error `code` values currently emitted:
+Emitted error `code` values:
 
-| code              | meaning                                             |
-|-------------------|-----------------------------------------------------|
-| `not_configured`  | CLI has no saved profile — run `thinr` to set up.   |
-| `not_found`       | Device, property, resource or profile not found.    |
-| `unauthorized`    | Token expired / insufficient permissions.           |
-| `server_error`    | Non-success HTTP response from the server.          |
-| `network_error`   | No response from the server.                        |
-| `input_error`     | Bad or missing CLI argument.                        |
-| `timeout`         | Command timed out on the device (`exec`).           |
-| `cancelled`       | User interrupted with Ctrl+C (`exec`).              |
-| `error`           | Fallback for anything uncategorised.                |
+| code | meaning |
+| --- | --- |
+| `not_configured` | CLI has no saved profile — run `thinr` to set up. |
+| `not_found` | Device, property, resource or profile not found. |
+| `unauthorized` | Token expired or insufficient permissions. |
+| `server_error` | Non-success HTTP response from the server. |
+| `network_error` | No response from the server. |
+| `input_error` | Bad or missing CLI argument. |
+| `timeout` | Command timed out on the device (`exec`). |
+| `cancelled` | User interrupted with Ctrl+C (`exec`). |
+| `error` | Fallback for anything uncategorised. |
 
-In JSON mode, spinners and progress messages are suppressed so the
-output is valid JSON without extra wrapping. Interactive commands
-(`console`, `env`, `tcp`/`tls`/`http` proxies) accept `--json`
-silently but do not change their behaviour, since they do not produce
-a discrete result. `exec` buffers stdout/stderr when `--json` is set
-and emits a single envelope on exit.
+Spinners and progress messages are suppressed in JSON mode so the
+output is valid JSON without wrappers. Interactive commands
+(`console`, `tcp`/`tls`/`http`, `env`) accept `--json` silently but
+don't change their behaviour — they don't produce a discrete result.
+`exec` buffers stdout/stderr when `--json` is set and emits a single
+envelope on exit.
 
-### Available Commands
+### `thinr devices`
 
-All device- and product-scoped actions follow a **subcommand-first**
-shape: the action comes before the target id, matching patterns like
-`kubectl describe pod <name>` or `git remote add <name> <url>`.
-
-    thinr device <action>  <deviceId>  [args...] [options]
-    thinr product <action> <productId> [args...] [options]
-
-#### Device
-
-Listing devices:
+List every device visible to the active profile:
 
 ```bash
-thinr devices [--json]
+thinr devices [-j, --json]
 ```
 
-##### Console
+Adds admin impersonation when combined with the global `-u, --user`
+flag.
 
-Connect to a device's terminal:
+### `thinr device <action> <deviceId>`
+
+#### `console`
+
+Open an interactive terminal on the device:
 
 ```bash
 thinr device console <deviceId>
 ```
 
-##### Proxy
+#### Proxies — `tcp` / `tls` / `http`
 
-Create a TCP, TLS or HTTP proxy to a remote device:
+Create a TCP, TLS, or HTTP proxy to a remote endpoint reachable from
+the device:
 
 ```bash
 thinr device tcp  <deviceId> [target] [options]
@@ -112,15 +171,17 @@ thinr device tls  <deviceId> [target] [options]
 thinr device http <deviceId> [target] [options]
 ```
 
-`target` is the remote address and port on the device. Defaults: tcp
-22, tls 443, http 80 — resolved against localhost when no address is
-given.
+`target` is the remote address and port on the device side. Defaults
+when omitted: `tcp` → 22, `tls` → 443, `http` → 80, against
+localhost.
 
 Options:
-- `-p, --port <port>`: Local port to bind (default: random)
+
+- `-p, --port <port>`: Local port to bind (default: random in 50000–51000)
 - `--no-open`: Do not open the browser automatically (http only)
 
 Examples:
+
 ```bash
 # TCP proxy to SSH
 thinr device tcp RevPi20679 22
@@ -128,91 +189,65 @@ thinr device tcp RevPi20679 22
 # HTTP proxy to a specific port
 thinr device http RevPi20679 8080
 
-# HTTP proxy to a specific address on the device
+# HTTP proxy to a specific address behind the device
 thinr device http RevPi20679 http://192.168.1.45:8080
 ```
 
-##### Status
-
-Check the connection status of a device:
+#### `status`
 
 ```bash
-thinr device status <deviceId> [options]
+thinr device status <deviceId> [-j, --json]
+```
+
+Returns the device's connection stats (uptime, tx/rx, last-seen).
+
+#### `property`
+
+List every property of a device, or read one by id:
+
+```bash
+thinr device property <deviceId>                                # list
+thinr device property <deviceId> <propertyId> [options]         # read
 ```
 
 Options:
+
 - `-j, --json`: Output as JSON
+- `-f, --field <path>`: Extract a sub-field via dot path (`-f data.value`)
 
-##### Property
+#### `resource`
 
-List the properties of a device:
-
-```bash
-thinr device property <deviceId>
-```
-
-Read one property:
+List the resources exposed by the device (with their `in`/`out`
+schemas when advertised), or call one:
 
 ```bash
-thinr device property <deviceId> <propertyId> [options]
+thinr device resource <deviceId>                                # list
+thinr device resource <deviceId> <resourceId> [options]         # call
 ```
 
 Options:
+
+- `-i, --input <key=value>`: Resource input (repeatable)
 - `-j, --json`: Output as JSON
-- `-f, --field <field>`: Extract a sub-field via dot path (e.g., `-f data.value`)
+- `-f, --field <path>`: Extract a sub-field from the result (dot path)
 
-##### Resource
+#### `exec`
 
-List the resources of a device (with `in`/`out` schemas):
-
-```bash
-thinr device resource <deviceId>
-```
-
-Call a resource:
-
-```bash
-thinr device resource <deviceId> <resourceId> [options]
-```
-
-Options:
-- `-i, --input <key=value>`: Input for the resource (repeatable)
-- `-j, --json`: Output as JSON
-- `-f, --field <field>`: Extract a sub-field from the result (dot path)
-
-##### Product
-
-Fan out across every device of a product:
-
-```bash
-thinr product property <productId> <propertyId> [options]
-thinr product resource <productId> <resourceName> [options]
-```
-
-Options:
-- `-j, --json`: Output as JSON (one envelope with `results[]` per device, each with its own `ok`)
-- `-f, --field <field>`: Extract a sub-field from each result (dot path)
-- `-g, --group <group>`: Filter devices by asset group
-- `-a, --all`: Include offline devices (for `property` only)
-
-Options for `resource`:
-- `-i, --input <key=value>`: Input for the resource (repeatable)
-
-##### Exec
-
-Run a command on the device and stream stdout/stderr back:
+Run a shell command on the device and stream stdout/stderr back:
 
 ```bash
 thinr device exec <deviceId> "<command>" [options]
 ```
 
 Options:
-- `-j, --json`: Buffer output and emit a single envelope `{stdout, stderr, exitCode}` on exit
+
+- `-j, --json`: Buffer output and emit a single envelope
+  `{stdout, stderr, exitCode}` on exit
 - `--legacy`: Use the non-streaming one-shot API (older agents)
 
 The process exits with the remote command's exit code.
 
-##### Update
+#### `update`
 
 Check for or apply an agent update on the device:
 
@@ -222,58 +257,222 @@ thinr device update apply <deviceId> [options]
 ```
 
 Options:
+
 - `--channel <name>`: Update channel (default: `latest`)
 - `-j, --json`: Output as JSON
 
-#### Profile
+#### `env`
 
-Manage multiple CLI configurations (one per server / account):
+See [`thinr env` — one-shot Claude Code launcher](#thinr-env--one-shot-claude-code-launcher)
+in the MCP section.
+
+#### `mcp`
+
+Start a device-scoped MCP server (equivalent to `thinr mcp -d
+<deviceId>`). See [Part 2 — MCP server](#part-2--mcp-server).
+
+### `thinr product <action> <productId>`
+
+Fan out an operation across every device that belongs to a product.
+
+#### `property`
 
 ```bash
-thinr profile list [--json]
-thinr profile current [--json]
-thinr profile use <name> [--json]
+thinr product property <productId> <propertyId> [options]
+```
+
+Options:
+
+- `-j, --json`: Output as JSON. Emits one envelope with a `results[]`
+  array, one entry per device, each with its own `ok` flag.
+- `-f, --field <path>`: Extract a sub-field from each property (dot path)
+- `-a, --all`: Include offline devices (default: only active)
+- `-g, --group <group>`: Filter devices by asset group
+
+#### `resource`
+
+```bash
+thinr product resource <productId> <resource> [options]
+```
+
+Options:
+
+- `-j, --json`: Output as JSON (`results[]` array, same shape as above)
+- `-f, --field <path>`: Extract a sub-field from each result (dot path)
+- `-g, --group <group>`: Filter devices by asset group
+- `-i, --input <key=value>`: Resource input (repeatable)
+
+Offline devices are skipped for `resource` — the server would reject
+the call anyway.
+
+### `thinr profile`
+
+Manage the profile store (see [Profiles and multi-account
+use](#profiles-and-multi-account-use)):
+
+```bash
+thinr profile list          [--json]
+thinr profile current       [--json]
+thinr profile use    <name> [--json]
 thinr profile delete <name> [--json]
 ```
 
-The active profile can also be overridden per-call with the global
-`--profile <name>` option, or the `THINR_PROFILE` env var.
+### `thinr logout`
 
-### Help
-
-Get help for any command:
+Remove the active profile's credentials and config:
 
 ```bash
-thinr --help
-thinr device --help
-thinr logout --help
+thinr logout
 ```
+
+Other profiles are left untouched.
+
+---
+
+## Part 2 — MCP server
+
+`thinr` ships an [MCP][mcp] server that exposes the CLI's device
+operations as a set of typed tools. AI clients (Claude Code, Claude
+Desktop, and any other MCP-compatible host) can then list devices,
+run shell commands, read/write files, call resources, and manage
+products through the same API the CLI uses — with stable schemas and
+a consistent error contract.
+
+### Starting the server
+
+```bash
+thinr mcp [-d, --device <deviceId>]
+```
+
+The server speaks [MCP over stdio][mcp-stdio]. `-d/--device` sets a
+default device that tools can omit in each call; `--user` can be
+passed through (via the global flag) to impersonate another account.
+
+[mcp-stdio]: https://modelcontextprotocol.io/specification/server/transport#stdio
+
+### Tool catalog
+
+Roughly 28 tools, grouped by capability. Every tool accepts optional
+`device`, `user`, and `profile` arguments, so a single session can
+target any device/account/environment without restart.
+
+| Area | Tools |
+| --- | --- |
+| Discovery | `thinr_devices`, `thinr_search`, `thinr_device_info`, `thinr_profiles` |
+| Shell | `thinr_exec` (buffered), with streaming stdout/stderr |
+| Filesystem | `thinr_read`, `thinr_write`, `thinr_ls`, `thinr_mkdir`, `thinr_delete`, `thinr_move` |
+| Resources | `thinr_resource_list` (with `in`/`out` schemas), `thinr_resource_call` |
+| Properties | `thinr_property_get`, `thinr_property_set` |
+| Scripts (device) | `thinr_script_list`, `thinr_script_write`, `thinr_script_delete` |
+| Monitoring and update | `thinr_monitoring`, `thinr_update` |
+| Products | `thinr_products`, `thinr_product_delete`, `thinr_device_set_product` |
+| Product scripts | `thinr_product_script_list`, `thinr_product_script_read`, `thinr_product_script_write`, `thinr_product_script_delete` |
+
+Full input/output schemas are published via standard MCP
+`list_tools`; the client will show them when you connect.
+
+### Per-call controls
+
+- **`device`** — target device id; defaults to `THINR_DEVICE` when
+  omitted.
+- **`user`** — impersonate another account (admin only); defaults to
+  `THINR_USER`.
+- **`profile`** — switch the active profile for the duration of the
+  call. Useful for agents that need to hop between prod and staging
+  without restarting.
+
+### `thinr env` — one-shot Claude Code launcher
+
+```bash
+thinr env <deviceId> [mountpoint] [command…]
+```
+
+The quickest way to start using the MCP server with Claude Code.
+`thinr env` does three things, then hands control to the launched
+command:
+
+1. Registers a per-device MCP entry in Claude Code (via
+   `claude mcp add`) if one isn't already there. The entry launches
+   `thinr mcp -d <deviceId>` so the default device is preset.
+2. Creates a project directory (`mountpoint`, default
+   `./remote-<deviceId>`) with a tailored `CLAUDE.md` describing the
+   device and the available tools.
+3. Spawns `claude` (or the command you pass) inside that directory so
+   the new MCP server is in scope from the first turn.
+
+Equivalent shortcut inside the `device` namespace: `thinr device env
+<deviceId> [mountpoint] [command…]`.
+
+### Manual integration with Claude Code
+
+If you'd rather wire it up yourself:
+
+```bash
+claude mcp add thinr-myserver -s user -- thinr mcp -d <deviceId>
+```
+
+Or without a default device (tool calls must pass `device`
+themselves):
+
+```bash
+claude mcp add thinr -s user -- thinr mcp
+```
+
+Other MCP hosts follow the same pattern — they just need the command
+`thinr mcp` (optionally with `-d <deviceId>`) over stdio.
+
+---
+
+## Profiles and multi-account use
+
+`~/.config/thinr-cli/config.json` stores any number of profiles:
+
+```json
+{
+  "default": "perf.aws.thinger.io",
+  "profiles": {
+    "perf.aws.thinger.io": { "server": "...", "username": "...", "token": "..." },
+    "staging.local":       { "server": "...", "username": "...", "token": "..." }
+  }
+}
+```
+
+The active profile is picked, in order:
+
+1. `--profile <name>` flag on the command line.
+2. `THINR_PROFILE` environment variable.
+3. The `default` field in the config file.
+4. The sole profile, if there's only one.
+
+Logging in to a new server creates a new profile whose name is the
+server hostname (so it never clobbers an existing one). Legacy
+single-profile files from older versions of the CLI are detected on
+read and migrated in-memory without a manual step.
+
+Use `thinr profile use <name>` to change the persisted default, or
+`--profile <name>` / `THINR_PROFILE=<name>` for one-off runs.
 
 ## Development
 
-The project structure is organized as follows:
-
 ```
-thinr/
-├── bin/           # Main executable
-├── lib/           # Core functionality
-├── commands/      # Command implementations
+thinr-cli/
+├── bin/           # CLI entry point (thinr)
+├── commands/      # Commander subcommand modules
+├── lib/           # Core: api, auth, config, device-api, errors,
+│                  # output, mcp-server, env, proxy, console, …
 ├── package.json
 └── README.md
 ```
 
-### Building
+Local development:
 
 ```bash
 npm install
-npm link
+npm link            # makes `thinr` available on $PATH
+node bin/thinr.js   # or run directly without linking
 ```
 
-### Testing
-
-```bash
-npm test
-```
+There are no automated tests yet — contributions welcome.
 
 ## License
 
@@ -281,12 +480,25 @@ npm test
   <img style="float: right;" width="100px" height="137px" src="https://opensource.org/wp-content/uploads/2009/06/OSI_Standard_Logo_0.svg">
 </a>
 
-The plugin is licensed under the [MIT License](http://opensource.org/licenses/MIT):
+Released under the [MIT License](http://opensource.org/licenses/MIT).
 
 Copyright &copy; [Thinger.io](http://thinger.io)
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
