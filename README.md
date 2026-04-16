@@ -28,8 +28,7 @@ task at hand.
 - [Global options and environment variables](#global-options-and-environment-variables)
 - [Part 1 — CLI](#part-1--cli)
   - [JSON output](#json-output)
-  - [`thinr devices`](#thinr-devices)
-  - [`thinr device <action> <deviceId>`](#thinr-device-action-deviceid)
+  - [`thinr device <action> [<deviceId>]`](#thinr-device-action-deviceid)
   - [`thinr product <action> <productId>`](#thinr-product-action-productid)
   - [`thinr profile`](#thinr-profile)
   - [`thinr logout`](#thinr-logout)
@@ -139,18 +138,26 @@ don't change their behaviour — they don't produce a discrete result.
 `exec` buffers stdout/stderr when `--json` is set and emits a single
 envelope on exit.
 
-### `thinr devices`
+### `thinr device <action> [<deviceId>]`
 
-List every device visible to the active profile:
+Most actions take a `<deviceId>` as their first positional. The `list`
+action is the exception — it operates on the fleet, with an optional
+`<pattern>` to filter results.
+
+#### `list`
+
+List every device visible to the active profile, or filter with a
+case-insensitive regex (matched against device id and name on the
+server side):
 
 ```bash
-thinr devices [-j, --json]
+thinr device list                    # every device
+thinr device list supermicro         # only ids/names containing "supermicro"
+thinr device list "^revpi|jetson"    # regex alternation works too
+thinr device list --json             # JSON envelope with the raw API records
 ```
 
-Adds admin impersonation when combined with the global `-u, --user`
-flag.
-
-### `thinr device <action> <deviceId>`
+Combine with the global `-u, --user` flag for admin impersonation.
 
 #### `console`
 

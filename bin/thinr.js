@@ -18,7 +18,7 @@ for (let i = 2; i < process.argv.length; i++) {
 // Set JSON mode before any command runs so spinners/logs can opt out.
 detectJsonModeFromArgv();
 import { authenticate } from '../lib/auth.js';
-import { deviceCommand, devicesCommand } from '../commands/device.js';
+import { deviceCommand } from '../commands/device.js';
 import { logoutCommand } from '../commands/logout.js';
 import { productCommand } from "../commands/product.js";
 import { profileCommand } from '../commands/profile.js';
@@ -48,7 +48,6 @@ program
 
 // Register commands
 deviceCommand(program);
-devicesCommand(program);
 productCommand(program);
 profileCommand(program);
 logoutCommand(program);
