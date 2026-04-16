@@ -1,193 +1,146 @@
-import { configExists } from "../lib/config.js";
-import chalk from "chalk";
-import ora from "ora";
-import { formatDeviceProperty, getDeviceProperty } from "../lib/property.js";
-import { callDeviceResource } from "../lib/resource.js";
-import { filterActiveDevices, getDevices } from "../lib/device.js";
-import { isJsonMode, printOk, printErr, createSpinner, classifyError } from "../lib/output.js";
+import chalk from 'chalk';
+import { configExists } from '../lib/config.js';
+import { formatDeviceProperty, getDeviceProperty } from '../lib/property.js';
+import { callDeviceResource } from '../lib/resource.js';
+import { filterActiveDevices, getDevices } from '../lib/device.js';
+import {
+    setJsonMode,
+    isJsonMode,
+    printOk,
+    printErr,
+    createSpinner,
+    classifyError,
+} from '../lib/output.js';
 
-/**
- * Register the product command with all product related functionality.
- * @param {Command} program - Commander program instance
- */
-export function productCommand(program) {
-
-    const product = program.command('product').description('Product commands');
-
-    product
-        .argument('<productId>', 'ID of the product to manage')
-        .description('Device commands for a specific product')
-        .allowUnknownOption(true)
-        .allowExcessArguments(true)
-        .action( async (productId, options, command) => {
-
-            // Get additional arguments manually
-            const args = command.args.slice(1); // Skip productId
-            const action = args[0];
-            const target = args[1] && !args[1].startsWith('-') ? args[1] : null;
-
-            // Check if configured
-            if (!configExists()) {
-                printErr('Not configured. Run thinr without parameters to set up.', { code: 'not_configured' });
-            }
-
-            // If no action provided, show help
-            if (!action) {
-                printHelp(productId);
-                return;
-            }
-
-            // Parse options manually from process.argv
-            const parsedOptions = {
-                json: false,
-                inputs: {},
-                field: "",
-                allDevices: false,
-                group: null // Group option for filtering devices
-            };
-
-            const argv = process.argv;
-            for (let i = 0; i < argv.length; i++) {
-                if (argv[i] === '-j' || argv[i] === '--json') {
-                    parsedOptions.json = true;
-                } else if (argv[i] === '-i' || argv[i] === '--input') {
-                    let inputPair = argv[i + 1].split('=');
-                    parsedOptions.inputs[inputPair[0]] = inputPair[1];
-                } else if (argv[i] === '-f' || argv[i] === '--field') {
-                    parsedOptions.field = argv[i + 1];
-                } else if (argv[i] === '-h' || argv[i] === '--help') {
-                    printHelp(productId);
-                    return;
-                } else if (argv[i] === '-a' || argv[i] === '--all') {
-                    parsedOptions.allDevices = true;
-                } else if (argv[i] === '-g' || argv[i] === '--group') {
-                    parsedOptions.group = argv[i + 1];
-                }
-
-            }
-
-            let devices = [];
-            const spinner = createSpinner(`Retrieving devices for product ${productId}...`).start();
-            try {
-                let filter = {
-                    productId: productId,
-                };
-                if (parsedOptions.group) {
-                    filter.asset_group = parsedOptions.group;
-                }
-                devices = await getDevices(filter);
-                spinner.succeed(`Devices for product ${productId} retrieved successfully`);
-            } catch (e) {
-                spinner.fail(`Failed to retrieve devices for product ${productId}`);
-                const { message, code } = classifyError(e);
-                printErr(message, { code });
-            }
-
-            switch (action.toLowerCase()) {
-
-                case 'property': {
-                    if (!parsedOptions.allDevices) {
-                        devices = filterActiveDevices(devices);
-                    }
-                    const results = [];
-                    for (const device of devices) {
-                        try {
-                            const property = await getDeviceProperty(device.device, target);
-                            const value = parsedOptions.field
-                                ? parsedOptions.field.split('.').reduce((obj, key) => obj && obj[key], property)
-                                : property;
-                            results.push({ device: device.device, ok: true, data: value });
-                            if (!isJsonMode()) {
-                                console.log('Device', chalk.blue(device.device), 'property', chalk.blue(target));
-                                if (parsedOptions.field) {
-                                    console.log(value);
-                                } else {
-                                    console.log(formatDeviceProperty(device.device, target, property));
-                                }
-                            }
-                        } catch (e) {
-                            const { message, code } = classifyError(e);
-                            results.push({ device: device.device, ok: false, error: { message, code } });
-                            if (!isJsonMode()) {
-                                console.error(chalk.red(`Error retrieving property ${target} for device ${device.device}: ${e.message}`));
-                            }
-                        }
-                    }
-                    if (isJsonMode()) {
-                        printOk({ product: productId, property: target, results });
-                    }
-                    break;
-                }
-
-                case 'resource': {
-                    devices = filterActiveDevices(devices);
-                    const results = [];
-                    for (const device of devices) {
-                        try {
-                            const result = await callDeviceResource(device.device, target, parsedOptions.inputs);
-                            const value = parsedOptions.field
-                                ? parsedOptions.field.split('.').reduce((obj, key) => obj && obj[key], result)
-                                : result;
-                            results.push({ device: device.device, ok: true, data: value });
-                            if (!isJsonMode()) {
-                                console.log('Device', chalk.blue(device.device), 'resource', chalk.blue(target));
-                                console.log(value);
-                            }
-                        } catch (e) {
-                            const { message, code } = classifyError(e);
-                            results.push({ device: device.device, ok: false, error: { message, code } });
-                            if (!isJsonMode()) {
-                                console.error(chalk.red(`Error executing resource ${target} for device ${device.device}: ${e.message}`));
-                            }
-                        }
-                    }
-                    if (isJsonMode()) {
-                        printOk({ product: productId, resource: target, results });
-                    }
-                    break;
-                }
-
-                default:
-                    if (isJsonMode()) {
-                        printErr(`Unknown action '${action}'. Available actions: property, resource.`, { code: 'input_error' });
-                    }
-                    console.error(chalk.red(`Error: Unknown action '${action}'. Available actions: property, resource.\n`));
-                    printHelp(productId);
-                    process.exit(1);
-            }
-        });
+function ensureConfigured() {
+    if (!configExists()) {
+        printErr('Not configured. Run thinr without parameters to set up.', { code: 'not_configured' });
+    }
 }
 
-function printHelp(productId) {
-    console.log(`Usage: thinr device product ${productId} <command> [options]
+function applyJsonFlag(opts) {
+    if (opts.json) setJsonMode(true);
+}
 
-Available commands for device product "${productId}":
+function getGlobalUser(cmd) {
+    let root = cmd;
+    while (root.parent) root = root.parent;
+    return root.opts().user || null;
+}
 
-  property [propertyId]         Get a specific property of all devices belonging to the product
-                                Example: thinr device product ${productId} property uptime
+function collectInput(value, previous = {}) {
+    const idx = value.indexOf('=');
+    if (idx === -1) throw new Error(`Invalid --input value "${value}" (expected key=value)`);
+    return { ...previous, [value.slice(0, idx)]: value.slice(idx + 1) };
+}
 
-  resource [resource]           Execute a specific resource of all devices belonging to the product
-                                Example: thinr device product ${productId} resource reboot
+async function fetchProductDevices(productId, group, user) {
+    const filter = { productId };
+    if (group) filter.asset_group = group;
+    return getDevices(filter, user);
+}
 
-Arguments:
+/**
+ * `thinr product <subcommand> <productId> …` — fan-out commands across
+ * every device that belongs to a product.
+ */
+export function productCommand(program) {
+    const product = program
+        .command('product')
+        .description('Product commands (subcommand-first: thinr product <action> <productId>)');
 
-  propertyId                    ID of the property to retrieve (for property command)
+    product
+        .command('property <productId> <propertyId>')
+        .description("Read a property on every device of the product")
+        .option('-j, --json', 'Output as JSON')
+        .option('-f, --field <field>', 'Extract a sub-field from each property (dot path)')
+        .option('-a, --all', 'Include offline devices (default: only active)')
+        .option('-g, --group <group>', 'Filter devices by asset group')
+        .action(async (productId, propertyId, opts, cmd) => {
+            applyJsonFlag(opts);
+            ensureConfigured();
+            const user = getGlobalUser(cmd);
+            const spinner = createSpinner(`Retrieving devices for product ${productId}...`).start();
+            let devices;
+            try {
+                devices = await fetchProductDevices(productId, opts.group, user);
+                spinner.succeed(`Devices for product ${productId} retrieved successfully`);
+            } catch (error) {
+                spinner.fail(`Failed to retrieve devices for product ${productId}`);
+                const { message, code } = classifyError(error);
+                printErr(message, { code });
+                return;
+            }
+            if (!opts.all) devices = filterActiveDevices(devices);
 
-  resource                      Name of the resource to execute (for resource command)
-  
+            const results = [];
+            for (const device of devices) {
+                try {
+                    const property = await getDeviceProperty(device.device, propertyId);
+                    const value = opts.field
+                        ? opts.field.split('.').reduce((obj, key) => obj && obj[key], property)
+                        : property;
+                    results.push({ device: device.device, ok: true, data: value });
+                    if (!isJsonMode()) {
+                        console.log('Device', chalk.blue(device.device), 'property', chalk.blue(propertyId));
+                        if (opts.field) console.log(value);
+                        else console.log(formatDeviceProperty(device.device, propertyId, property));
+                    }
+                } catch (error) {
+                    const { message, code } = classifyError(error);
+                    results.push({ device: device.device, ok: false, error: { message, code } });
+                    if (!isJsonMode()) {
+                        console.error(chalk.red(`Error retrieving property ${propertyId} for device ${device.device}: ${message}`));
+                    }
+                }
+            }
+            if (isJsonMode()) printOk({ product: productId, property: propertyId, results });
+        });
 
-Options (for all product subcommands):
-  -g, --group <group>          Group of devices to filter (e.g., -g group1)
+    product
+        .command('resource <productId> <resource>')
+        .description("Call a resource on every active device of the product")
+        .option('-j, --json', 'Output as JSON')
+        .option('-f, --field <field>', 'Extract a sub-field from each result (dot path)')
+        .option('-g, --group <group>', 'Filter devices by asset group')
+        .option('-i, --input <key=value>', 'Resource input (repeatable)', collectInput, {})
+        .action(async (productId, resource, opts, cmd) => {
+            applyJsonFlag(opts);
+            ensureConfigured();
+            const user = getGlobalUser(cmd);
+            const spinner = createSpinner(`Retrieving devices for product ${productId}...`).start();
+            let devices;
+            try {
+                devices = await fetchProductDevices(productId, opts.group, user);
+                spinner.succeed(`Devices for product ${productId} retrieved successfully`);
+            } catch (error) {
+                spinner.fail(`Failed to retrieve devices for product ${productId}`);
+                const { message, code } = classifyError(error);
+                printErr(message, { code });
+                return;
+            }
+            devices = filterActiveDevices(devices);
 
-Options (for property command):
-  -j, --json                   Output as JSON
-  -f, --field <field>          Field to extract from the property (e.g., -f data.value)
-  -a, --all                    Include non active devices (default: false)
-
-Options (for resource command):
-  -j, --json                   Output as JSON
-  -f, --field <field>          Field to extract from the property (e.g., -f data.value)
-
-Use "thinr product device ${productId} <command> --help" for more details on each command.`);
-
+            const results = [];
+            for (const device of devices) {
+                try {
+                    const result = await callDeviceResource(device.device, resource, opts.input);
+                    const value = opts.field
+                        ? opts.field.split('.').reduce((obj, key) => obj && obj[key], result)
+                        : result;
+                    results.push({ device: device.device, ok: true, data: value });
+                    if (!isJsonMode()) {
+                        console.log('Device', chalk.blue(device.device), 'resource', chalk.blue(resource));
+                        console.log(value);
+                    }
+                } catch (error) {
+                    const { message, code } = classifyError(error);
+                    results.push({ device: device.device, ok: false, error: { message, code } });
+                    if (!isJsonMode()) {
+                        console.error(chalk.red(`Error executing resource ${resource} for device ${device.device}: ${message}`));
+                    }
+                }
+            }
+            if (isJsonMode()) printOk({ product: productId, resource, results });
+        });
 }
