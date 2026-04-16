@@ -87,8 +87,6 @@ These apply to every subcommand:
 | `--profile <name>` | `THINR_PROFILE` | Use a non-default profile for this invocation. |
 | `-u, --user <name>` | — | Admin impersonation: act on behalf of another user (requires admin privileges on the server). |
 | — | `THINR_INSECURE=1` | Accept self-signed TLS certificates globally. Localhost / 127.0.0.1 are always accepted; this flag extends the relaxation to any host, useful for LAN dev servers. |
-| — | `THINR_DEVICE` | Default device for the MCP server when no `device` is passed per call. Equivalent to `thinr mcp -d <deviceId>`. |
-| — | `THINR_USER` | Default impersonated user for the MCP server. |
 
 ---
 
@@ -369,25 +367,30 @@ Full input/output schemas are published via standard MCP
 
 ### Per-call controls
 
-- **`device`** — target device id; defaults to `THINR_DEVICE` when
-  omitted.
-- **`user`** — impersonate another account (admin only); defaults to
-  `THINR_USER`.
-- **`profile`** — switch the active profile for the duration of the
-  call. Useful for agents that need to hop between prod and staging
-  without restarting.
+The server starts with no per-session pin: every tool call must say
+which device it's for, and may optionally override the account or
+profile for that single call.
+
+- **`device`** — required for any device-scoped tool. Use
+  `thinr_devices` (or `thinr_search` with a pattern) to discover ids.
+- **`user`** — optional admin impersonation; falls back to the
+  authenticated user of the active profile.
+- **`profile`** — optional. Switches the active profile for that
+  single tool call so an agent can hop between prod and staging
+  without restarting the server. List the configured profiles with
+  `thinr_profiles`.
 
 ### Integrating with Claude Code
 
 Register the server once with the Claude Code CLI:
 
 ```bash
-# Pinned to a single device — every tool call defaults to it
-claude mcp add thinr-<deviceId> -s user -- thinr mcp -d <deviceId>
-
-# Or unscoped — tool calls must pass `device` themselves
 claude mcp add thinr -s user -- thinr mcp
 ```
+
+That's it — a single MCP server entry handles every device of the
+active profile. Tool calls pass `device` (and optionally `user` /
+`profile`) per call.
 
 Other MCP hosts follow the same pattern — they just need the command
 `thinr mcp` (optionally with `-d <deviceId>`) over stdio.
