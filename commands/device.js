@@ -297,7 +297,10 @@ export function deviceCommand(program) {
             } catch (error) {
                 const { message, code } = classifyError(error);
                 if (isJsonMode()) printErr(message, { code });
-                console.error(chalk.red(`Error: ${message}`));
+                // Human path: prefix `[code]` matches the MCP error format
+                // and the rest of the CLI; the response dump only surfaces
+                // when the failure carries an HTTP body.
+                console.error(chalk.red(`Error [${code}]: ${message}`));
                 if (error.response) {
                     console.error(chalk.red(`Status: ${error.response.status}`));
                     console.error(chalk.red(`Body: ${JSON.stringify(error.response.data)}`));
