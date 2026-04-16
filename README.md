@@ -352,7 +352,7 @@ target any device/account/environment without restart.
 
 | Area | Tools |
 | --- | --- |
-| Discovery | `thinr_devices`, `thinr_search`, `thinr_device_info`, `thinr_profiles` |
+| Discovery | `thinr_devices` (with optional `query` for regex filtering), `thinr_device_info`, `thinr_profiles` |
 | Shell | `thinr_exec` (buffered), with streaming stdout/stderr |
 | Filesystem | `thinr_read`, `thinr_write`, `thinr_ls`, `thinr_mkdir`, `thinr_delete`, `thinr_move` |
 | Resources | `thinr_resource_list` (with `in`/`out` schemas), `thinr_resource_call` |
@@ -372,7 +372,8 @@ which device it's for, and may optionally override the account or
 profile for that single call.
 
 - **`device`** — required for any device-scoped tool. Use
-  `thinr_devices` (or `thinr_search` with a pattern) to discover ids.
+  `thinr_devices` (optionally with `query` to filter by regex) to
+  discover ids.
 - **`user`** — optional admin impersonation; falls back to the
   authenticated user of the active profile.
 - **`profile`** — optional. Switches the active profile for that

@@ -6,7 +6,11 @@ import {
     setDefaultProfile,
     deleteProfile,
 } from '../lib/config.js';
-import { isJsonMode, printOk, printErr } from '../lib/output.js';
+import { setJsonMode, isJsonMode, printOk, printErr } from '../lib/output.js';
+
+function applyJsonFlag(opts) {
+    if (opts.json) setJsonMode(true);
+}
 
 export function profileCommand(program) {
     const profile = program.command('profile').description('Manage configuration profiles');
@@ -15,7 +19,8 @@ export function profileCommand(program) {
         .command('list')
         .description('List configured profiles')
         .option('-j, --json', 'Output as JSON')
-        .action(() => {
+        .action((opts) => {
+            applyJsonFlag(opts);
             const names = listProfiles();
             const active = getActiveProfile();
             if (isJsonMode()) {
@@ -47,7 +52,8 @@ export function profileCommand(program) {
         .command('current')
         .description('Print the active profile')
         .option('-j, --json', 'Output as JSON')
-        .action(() => {
+        .action((opts) => {
+            applyJsonFlag(opts);
             const name = getActiveProfile();
             if (isJsonMode()) {
                 printOk({ active: name });
@@ -64,27 +70,31 @@ export function profileCommand(program) {
         .command('use <name>')
         .description('Set the default profile')
         .option('-j, --json', 'Output as JSON')
-        .action((name) => {
+        .action((name, opts) => {
+            applyJsonFlag(opts);
             try {
                 setDefaultProfile(name);
-                if (isJsonMode()) {
-                    printOk({ active: name });
-                    return;
-                }
-                console.log(chalk.green(`Default profile set to ${name}`));
             } catch (error) {
                 printErr(error.message, { code: 'not_found' });
+                return;
             }
+            if (isJsonMode()) {
+                printOk({ active: name });
+                return;
+            }
+            console.log(chalk.green(`Default profile set to ${name}`));
         });
 
     profile
         .command('delete <name>')
         .description('Remove a profile')
         .option('-j, --json', 'Output as JSON')
-        .action((name) => {
+        .action((name, opts) => {
+            applyJsonFlag(opts);
             const ok = deleteProfile(name);
             if (!ok) {
                 printErr(`Profile not found: ${name}`, { code: 'not_found' });
+                return;
             }
             if (isJsonMode()) {
                 printOk({ removed: name });
