@@ -70,6 +70,11 @@ consistent error taxonomy across both interfaces.
 - Bad `-i key=value` values surface as a clean Commander
   `InvalidArgumentError` instead of a stack trace.
 - Node.js engine requirement bumped to **`>=18`**; `.nvmrc` pinned to 20.
+- The MCP server's `initialize` response now reports the CLI's
+  `package.json` version in `serverInfo.version` (was hardcoded).
+- Runtime dependencies refreshed, including majors: `@inquirer/prompts`
+  7 → 8, `conf` 14 → 15, `open` 10 → 11, `ora` 8 → 9. All npm audit
+  advisories cleared (0 vulnerabilities on install).
 
 ### Removed
 
@@ -88,6 +93,9 @@ consistent error taxonomy across both interfaces.
   `npm run typecheck`.
 - Unit tests with `node --test` (zero deps): MCP registry invariants +
   error helpers. Script: `npm test`.
+- Publish pipeline migrated from a long-lived `NPM_TOKEN` secret to npm
+  Trusted Publishing (OIDC), with `--provenance` attestations on every
+  publish. GitHub Actions bumped to `checkout@v5` / `setup-node@v5`.
 
 ## [1.0.2] - 2025-07-21
 
