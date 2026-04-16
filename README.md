@@ -43,9 +43,49 @@ thinr
 
 You'll be prompted to authenticate either with username/password or with an existing token.
 
+### JSON output
+
+Every data-producing command accepts `-j, --json` and writes a single
+envelope to stdout so scripts can pipe it to `jq`:
+
+```json
+{ "ok": true, "data": <payload> }
+{ "ok": false, "error": { "message": "...", "code": "<code>" } }
+```
+
+Process exit codes always reflect success (`0`) or failure (non-zero),
+independently of the envelope.
+
+Error `code` values currently emitted:
+
+| code              | meaning                                             |
+|-------------------|-----------------------------------------------------|
+| `not_configured`  | CLI has no saved profile — run `thinr` to set up.   |
+| `not_found`       | Device, property, resource or profile not found.    |
+| `unauthorized`    | Token expired / insufficient permissions.           |
+| `server_error`    | Non-success HTTP response from the server.          |
+| `network_error`   | No response from the server.                        |
+| `input_error`     | Bad or missing CLI argument.                        |
+| `timeout`         | Command timed out on the device (`exec`).           |
+| `cancelled`       | User interrupted with Ctrl+C (`exec`).              |
+| `error`           | Fallback for anything uncategorised.                |
+
+In JSON mode, spinners and progress messages are suppressed so the
+output is valid JSON without extra wrapping. Interactive commands
+(`console`, `env`, `tcp`/`tls`/`http` proxies) accept `--json`
+silently but do not change their behaviour, since they do not produce
+a discrete result. `exec` buffers stdout/stderr when `--json` is set
+and emits a single envelope on exit.
+
 ### Available Commands
 
 #### Device
+
+Listing devices:
+
+```bash
+thinr devices [--json]
+```
 
 ##### Console
 
@@ -144,12 +184,54 @@ thinr product <productId> resource [options]
 ```
 
 Options:
-- `-j, --json`: Output the status in JSON format
+- `-j, --json`: Output as JSON (one envelope with `results[]` per device, each with its own `ok`)
 - `-f, --field`: Field to extract from the property or resource (e.g., -f data.value)
+- `-g, --group`: Filter devices by asset group
+- `-a, --all`: Include offline devices (for `property` only)
 
 Options for executing a resource:
 - `-i, --input`: Input for the resource (e.g., -i param1=value1 -i param2=value2)
 
+##### Exec
+
+Run a command on the device and stream its stdout/stderr back:
+
+```bash
+thinr device <deviceId> exec "<command>" [options]
+```
+
+Options:
+- `-j, --json`: Buffer output and emit a single envelope `{stdout, stderr, exitCode}` on exit
+- `--legacy`: Use the non-streaming one-shot API (older agents)
+
+The process exits with the remote command's exit code.
+
+##### Update
+
+Check for or apply an agent update on the device:
+
+```bash
+thinr device <deviceId> update check [options]
+thinr device <deviceId> update apply [options]
+```
+
+Options:
+- `--channel <name>`: Update channel (default: `latest`)
+- `-j, --json`: Output as JSON
+
+#### Profile
+
+Manage multiple CLI configurations (one per server / account):
+
+```bash
+thinr profile list [--json]
+thinr profile current [--json]
+thinr profile use <name> [--json]
+thinr profile delete <name> [--json]
+```
+
+The active profile can also be overridden per-call with the global
+`--profile <name>` option, or the `THINR_PROFILE` env var.
 
 ### Help
 
