@@ -3,7 +3,7 @@ import { InvalidArgumentError } from 'commander';
 import { configExists } from '../lib/config.js';
 import { formatDeviceProperty, getDeviceProperty } from '../lib/property.js';
 import { callDeviceResource } from '../lib/resource.js';
-import { filterActiveDevices, getDevices } from '../lib/device.js';
+import { filterActiveDevices, getDevices } from '../lib/devices.js';
 import {
     setJsonMode,
     isJsonMode,
@@ -15,7 +15,9 @@ import {
 
 function ensureConfigured() {
     if (!configExists()) {
-        printErr('Not configured. Run thinr without parameters to set up.', { code: 'not_configured' });
+        printErr('Not configured. Run thinr without parameters to set up.', {
+            code: 'not_configured',
+        });
     }
 }
 
@@ -52,7 +54,7 @@ export function productCommand(program) {
 
     product
         .command('property <productId> <propertyId>')
-        .description("Read a property on every device of the product")
+        .description('Read a property on every device of the product')
         .option('-j, --json', 'Output as JSON')
         .option('-f, --field <field>', 'Extract a sub-field from each property (dot path)')
         .option('-a, --all', 'Include offline devices (default: only active)')
@@ -83,7 +85,12 @@ export function productCommand(program) {
                         : property;
                     results.push({ device: device.device, ok: true, data: value });
                     if (!isJsonMode()) {
-                        console.log('Device', chalk.blue(device.device), 'property', chalk.blue(propertyId));
+                        console.log(
+                            'Device',
+                            chalk.blue(device.device),
+                            'property',
+                            chalk.blue(propertyId),
+                        );
                         if (opts.field) console.log(value);
                         else console.log(formatDeviceProperty(device.device, propertyId, property));
                     }
@@ -91,7 +98,11 @@ export function productCommand(program) {
                     const { message, code } = classifyError(error);
                     results.push({ device: device.device, ok: false, error: { message, code } });
                     if (!isJsonMode()) {
-                        console.error(chalk.red(`Error retrieving property ${propertyId} for device ${device.device}: ${message}`));
+                        console.error(
+                            chalk.red(
+                                `Error retrieving property ${propertyId} for device ${device.device}: ${message}`,
+                            ),
+                        );
                     }
                 }
             }
@@ -100,7 +111,7 @@ export function productCommand(program) {
 
     product
         .command('resource <productId> <resource>')
-        .description("Call a resource on every active device of the product")
+        .description('Call a resource on every active device of the product')
         .option('-j, --json', 'Output as JSON')
         .option('-f, --field <field>', 'Extract a sub-field from each result (dot path)')
         .option('-g, --group <group>', 'Filter devices by asset group')
@@ -131,14 +142,23 @@ export function productCommand(program) {
                         : result;
                     results.push({ device: device.device, ok: true, data: value });
                     if (!isJsonMode()) {
-                        console.log('Device', chalk.blue(device.device), 'resource', chalk.blue(resource));
+                        console.log(
+                            'Device',
+                            chalk.blue(device.device),
+                            'resource',
+                            chalk.blue(resource),
+                        );
                         console.log(value);
                     }
                 } catch (error) {
                     const { message, code } = classifyError(error);
                     results.push({ device: device.device, ok: false, error: { message, code } });
                     if (!isJsonMode()) {
-                        console.error(chalk.red(`Error executing resource ${resource} for device ${device.device}: ${message}`));
+                        console.error(
+                            chalk.red(
+                                `Error executing resource ${resource} for device ${device.device}: ${message}`,
+                            ),
+                        );
                     }
                 }
             }

@@ -12,36 +12,37 @@ import { detectJsonModeFromArgv } from '../lib/output.js';
 
 // Single source of truth for the version: package.json. Avoids the drift
 // between `package.json#version` and a hardcoded string in this file.
-const pkg = JSON.parse(readFileSync(
-    resolve(dirname(fileURLToPath(import.meta.url)), '../package.json'),
-    'utf8',
-));
+const pkg = JSON.parse(
+    readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../package.json'), 'utf8'),
+);
 
 // Pick up --profile early so subsequent config reads use the right one.
 // Commander parses options later, but the config is touched before that.
 for (let i = 2; i < process.argv.length; i++) {
     const a = process.argv[i];
-    if (a === '--profile' && process.argv[i + 1]) { setActiveProfile(process.argv[i + 1]); break; }
-    if (a.startsWith('--profile=')) { setActiveProfile(a.slice('--profile='.length)); break; }
+    if (a === '--profile' && process.argv[i + 1]) {
+        setActiveProfile(process.argv[i + 1]);
+        break;
+    }
+    if (a.startsWith('--profile=')) {
+        setActiveProfile(a.slice('--profile='.length));
+        break;
+    }
 }
 
 // Set JSON mode before any command runs so spinners/logs can opt out.
 detectJsonModeFromArgv();
 import { authenticate } from '../lib/auth.js';
-import { deviceCommand } from '../commands/device.js';
+import { deviceCommand } from '../commands/device/index.js';
 import { logoutCommand } from '../commands/logout.js';
-import { productCommand } from "../commands/product.js";
+import { productCommand } from '../commands/product.js';
 import { profileCommand } from '../commands/profile.js';
 import { setBaseURL } from '../lib/api.js';
-import { startMCPServer } from '../lib/mcp-server.js';
+import { startMCPServer } from '../lib/mcp/server.js';
 
 // Function to display the banner
 function displayBanner() {
-    console.log(
-        chalk.cyan(
-            figlet.textSync('thinr-cli', { horizontalLayout: 'full' })
-        )
-    );
+    console.log(chalk.cyan(figlet.textSync('thinr-cli', { horizontalLayout: 'full' })));
     console.log(chalk.blue('Thin Remote CLI - Remote management for IoT devices'));
     console.log();
 }
@@ -76,7 +77,7 @@ program
 
 // Handle help
 const originalHelp = program.help;
-program.help = function(cb) {
+program.help = function (cb) {
     displayBanner();
     return originalHelp.call(this, cb);
 };
