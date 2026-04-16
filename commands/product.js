@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { InvalidArgumentError } from 'commander';
 import { configExists } from '../lib/config.js';
 import { formatDeviceProperty, getDeviceProperty } from '../lib/property.js';
 import { callDeviceResource } from '../lib/resource.js';
@@ -30,7 +31,7 @@ function getGlobalUser(cmd) {
 
 function collectInput(value, previous = {}) {
     const idx = value.indexOf('=');
-    if (idx === -1) throw new Error(`Invalid --input value "${value}" (expected key=value)`);
+    if (idx === -1) throw new InvalidArgumentError('must be key=value');
     return { ...previous, [value.slice(0, idx)]: value.slice(idx + 1) };
 }
 

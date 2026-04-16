@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { InvalidArgumentError } from 'commander';
 import { handleProxyAction } from '../lib/proxy.js';
 import { connectToDeviceConsole } from '../lib/console.js';
 import { getDeviceStatus, formatDeviceStatus } from '../lib/status.js';
@@ -45,10 +46,12 @@ function getGlobalUser(cmd) {
     return root.opts().user || null;
 }
 
-// Collect repeatable `-i key=value` pairs into a single object.
+// Collect repeatable `-i key=value` pairs into a single object. Uses
+// Commander's InvalidArgumentError so a bad value prints a clean
+// "error: option … argument is invalid" line instead of a stack trace.
 function collectInput(value, previous = {}) {
     const idx = value.indexOf('=');
-    if (idx === -1) throw new Error(`Invalid --input value "${value}" (expected key=value)`);
+    if (idx === -1) throw new InvalidArgumentError('must be key=value');
     return { ...previous, [value.slice(0, idx)]: value.slice(idx + 1) };
 }
 
