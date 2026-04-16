@@ -27,16 +27,16 @@ task at hand.
 - [Initial setup](#initial-setup)
 - [Global options and environment variables](#global-options-and-environment-variables)
 - [Part 1 — CLI](#part-1--cli)
-  - [JSON output](#json-output)
-  - [`thinr device <action> [<deviceId>]`](#thinr-device-action-deviceid)
-  - [`thinr product <action> <productId>`](#thinr-product-action-productid)
-  - [`thinr profile`](#thinr-profile)
-  - [`thinr logout`](#thinr-logout)
+    - [JSON output](#json-output)
+    - [`thinr device <action> [<deviceId>]`](#thinr-device-action-deviceid)
+    - [`thinr product <action> <productId>`](#thinr-product-action-productid)
+    - [`thinr profile`](#thinr-profile)
+    - [`thinr logout`](#thinr-logout)
 - [Part 2 — MCP server](#part-2--mcp-server)
-  - [Starting the server](#starting-the-server)
-  - [Tool catalog](#tool-catalog)
-  - [Per-call controls](#per-call-controls)
-  - [Integrating with Claude Code](#integrating-with-claude-code)
+    - [Starting the server](#starting-the-server)
+    - [Tool catalog](#tool-catalog)
+    - [Per-call controls](#per-call-controls)
+    - [Integrating with Claude Code](#integrating-with-claude-code)
 - [Profiles and multi-account use](#profiles-and-multi-account-use)
 - [Development](#development)
 - [License](#license)
@@ -58,7 +58,7 @@ npm install
 npm link
 ```
 
-Requires Node.js ≥ 14.16.
+Requires Node.js ≥ 18.
 
 ## Initial setup
 
@@ -82,11 +82,11 @@ second server creates a second profile side-by-side; see
 
 These apply to every subcommand:
 
-| Flag | Env var | Meaning |
-| --- | --- | --- |
-| `--profile <name>` | `THINR_PROFILE` | Use a non-default profile for this invocation. |
-| `-u, --user <name>` | — | Admin impersonation: act on behalf of another user (requires admin privileges on the server). |
-| — | `THINR_INSECURE=1` | Accept self-signed TLS certificates globally. Localhost / 127.0.0.1 are always accepted; this flag extends the relaxation to any host, useful for LAN dev servers. |
+| Flag                | Env var            | Meaning                                                                                                                                                            |
+| ------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--profile <name>`  | `THINR_PROFILE`    | Use a non-default profile for this invocation.                                                                                                                     |
+| `-u, --user <name>` | —                  | Admin impersonation: act on behalf of another user (requires admin privileges on the server).                                                                      |
+| —                   | `THINR_INSECURE=1` | Accept self-signed TLS certificates globally. Localhost / 127.0.0.1 are always accepted; this flag extends the relaxation to any host, useful for LAN dev servers. |
 
 ---
 
@@ -116,17 +116,17 @@ independently of the envelope.
 
 Emitted error `code` values:
 
-| code | meaning |
-| --- | --- |
+| code             | meaning                                           |
+| ---------------- | ------------------------------------------------- |
 | `not_configured` | CLI has no saved profile — run `thinr` to set up. |
-| `not_found` | Device, property, resource or profile not found. |
-| `unauthorized` | Token expired or insufficient permissions. |
-| `server_error` | Non-success HTTP response from the server. |
-| `network_error` | No response from the server. |
-| `input_error` | Bad or missing CLI argument. |
-| `timeout` | Command timed out on the device (`exec`). |
-| `cancelled` | User interrupted with Ctrl+C (`exec`). |
-| `error` | Fallback for anything uncategorised. |
+| `not_found`      | Device, property, resource or profile not found.  |
+| `unauthorized`   | Token expired or insufficient permissions.        |
+| `server_error`   | Non-success HTTP response from the server.        |
+| `network_error`  | No response from the server.                      |
+| `input_error`    | Bad or missing CLI argument.                      |
+| `timeout`        | Command timed out on the device (`exec`).         |
+| `cancelled`      | User interrupted with Ctrl+C (`exec`).            |
+| `error`          | Fallback for anything uncategorised.              |
 
 Spinners and progress messages are suppressed in JSON mode so the
 output is valid JSON without wrappers. Interactive commands
@@ -350,17 +350,17 @@ Roughly 28 tools, grouped by capability. Every tool accepts optional
 `device`, `user`, and `profile` arguments, so a single session can
 target any device/account/environment without restart.
 
-| Area | Tools |
-| --- | --- |
-| Discovery | `thinr_devices` (with optional `query` for regex filtering), `thinr_device_info`, `thinr_profiles` |
-| Shell | `thinr_exec` (buffered), with streaming stdout/stderr |
-| Filesystem | `thinr_read`, `thinr_write`, `thinr_ls`, `thinr_mkdir`, `thinr_delete`, `thinr_move` |
-| Resources | `thinr_resource_list` (with `in`/`out` schemas), `thinr_resource_call` |
-| Properties | `thinr_property_get`, `thinr_property_set` |
-| Scripts (device) | `thinr_script_list`, `thinr_script_write`, `thinr_script_delete` |
-| Monitoring and update | `thinr_monitoring`, `thinr_update` |
-| Products | `thinr_products`, `thinr_product_delete`, `thinr_device_set_product` |
-| Product scripts | `thinr_product_script_list`, `thinr_product_script_read`, `thinr_product_script_write`, `thinr_product_script_delete` |
+| Area                  | Tools                                                                                                                 |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Discovery             | `thinr_devices` (with optional `query` for regex filtering), `thinr_device_info`, `thinr_profiles`                    |
+| Shell                 | `thinr_exec` (buffered), with streaming stdout/stderr                                                                 |
+| Filesystem            | `thinr_read`, `thinr_write`, `thinr_ls`, `thinr_mkdir`, `thinr_delete`, `thinr_move`                                  |
+| Resources             | `thinr_resource_list` (with `in`/`out` schemas), `thinr_resource_call`                                                |
+| Properties            | `thinr_property_get`, `thinr_property_set`                                                                            |
+| Scripts (device)      | `thinr_script_list`, `thinr_script_write`, `thinr_script_delete`                                                      |
+| Monitoring and update | `thinr_monitoring`, `thinr_update`                                                                                    |
+| Products              | `thinr_products`, `thinr_product_delete`, `thinr_device_set_product`                                                  |
+| Product scripts       | `thinr_product_script_list`, `thinr_product_script_read`, `thinr_product_script_write`, `thinr_product_script_delete` |
 
 Full input/output schemas are published via standard MCP
 `list_tools`; the client will show them when you connect.
@@ -404,11 +404,11 @@ Other MCP hosts follow the same pattern — they just need the command
 
 ```json
 {
-  "default": "perf.aws.thinger.io",
-  "profiles": {
-    "perf.aws.thinger.io": { "server": "...", "username": "...", "token": "..." },
-    "staging.local":       { "server": "...", "username": "...", "token": "..." }
-  }
+    "default": "perf.aws.thinger.io",
+    "profiles": {
+        "perf.aws.thinger.io": { "server": "...", "username": "...", "token": "..." },
+        "staging.local": { "server": "...", "username": "...", "token": "..." }
+    }
 }
 ```
 
