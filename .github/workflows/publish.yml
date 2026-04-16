@@ -9,6 +9,14 @@ jobs:
         name: publish
         runs-on: ubuntu-latest
 
+        # Trusted Publishing to npm: GitHub mints a short-lived OIDC token,
+        # npm verifies it against the publisher configured for this package,
+        # and no long-lived NPM_TOKEN has to live in GitHub secrets.
+        # Also required for the `--provenance` attestation below.
+        permissions:
+            id-token: write
+            contents: write
+
         steps:
             - name: Extract branch name
               shell: bash
@@ -23,7 +31,9 @@ jobs:
             - name: node
               uses: actions/setup-node@v4
               with:
-                  node-version: 22
+                  # Node 24 ships npm >= 11.5, needed for Trusted Publishing
+                  # and the `--provenance` attestation below.
+                  node-version: 24
                   registry-url: https://registry.npmjs.org
 
             - name: Get tag version
@@ -51,9 +61,7 @@ jobs:
                   npm version --no-git-tag-version --allow-same-version ${{ env.tag_version }}
 
             - name: publish
-              run: npm publish --tag ${{ env.npm_tag_version }} --access public
-              env:
-                  NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+              run: npm publish --provenance --tag ${{ env.npm_tag_version }} --access public
 
             - name: Get changelog body
               run: |
