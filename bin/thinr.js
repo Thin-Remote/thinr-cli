@@ -23,6 +23,7 @@ import { logoutCommand } from '../commands/logout.js';
 import { productCommand } from "../commands/product.js";
 import { profileCommand } from '../commands/profile.js';
 import { setBaseURL } from '../lib/api.js';
+import { startMCPServer } from '../lib/mcp-server.js';
 
 // Function to display the banner
 function displayBanner() {
@@ -49,6 +50,22 @@ deviceCommand(program);
 productCommand(program);
 profileCommand(program);
 logoutCommand(program);
+
+program
+    .command('mcp')
+    .description('Start MCP server for AI tool integration')
+    .option('-d, --device <deviceId>', 'Default device ID')
+    .action(async (options) => {
+        // Allow env vars to set defaults (used by thinr env)
+        if (options.device) process.env.THINR_DEVICE = options.device;
+        if (program.opts().user) process.env.THINR_USER = program.opts().user;
+        try {
+            await startMCPServer();
+        } catch (error) {
+            console.error(`Error: ${error.message}`);
+            process.exit(1);
+        }
+    });
 
 // Handle help
 const originalHelp = program.help;
