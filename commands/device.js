@@ -98,51 +98,60 @@ export function deviceCommand(program) {
             }
         });
 
+    // Wrapper for the proxy / console handlers, which now return a Promise
+    // that resolves with an exit code or rejects with a tagged Error
+    // (instead of calling process.exit themselves).
+    const runInteractive = async (fn) => {
+        try {
+            const exitCode = await fn();
+            process.exit(exitCode ?? 0);
+        } catch (error) {
+            const { message, code } = classifyError(error);
+            console.error(chalk.red(`Error [${code}]: ${message}`));
+            process.exit(1);
+        }
+    };
+
     // ─── Proxies ───────────────────────────────────────────────────────────
     device
         .command('tcp <deviceId> [target]')
         .description('Create a TCP proxy (no TLS). Default target: 22.')
         .option('-p, --port <port>', 'Local port to use (default: random)')
-        .action(async (deviceId, target, opts) => {
+        .action((deviceId, target, opts) => runInteractive(() => {
             ensureConfigured();
-            await handleProxyAction(deviceId, 'tcp', target, { port: opts.port });
-        });
+            return handleProxyAction(deviceId, 'tcp', target, { port: opts.port });
+        }));
 
     device
         .command('tls <deviceId> [target]')
         .description('Create a TLS proxy. Default target: 443.')
         .option('-p, --port <port>', 'Local port to use (default: random)')
-        .action(async (deviceId, target, opts) => {
+        .action((deviceId, target, opts) => runInteractive(() => {
             ensureConfigured();
-            await handleProxyAction(deviceId, 'tls', target, { port: opts.port });
-        });
+            return handleProxyAction(deviceId, 'tls', target, { port: opts.port });
+        }));
 
     device
         .command('http <deviceId> [target]')
         .description('Create an HTTP proxy. Default target: 80.')
         .option('-p, --port <port>', 'Local port to use (default: random)')
         .option('--no-open', 'Do not open the browser')
-        .action(async (deviceId, target, opts) => {
+        .action((deviceId, target, opts) => runInteractive(() => {
             ensureConfigured();
-            await handleProxyAction(deviceId, 'http', target, {
+            return handleProxyAction(deviceId, 'http', target, {
                 port: opts.port,
                 openBrowser: opts.open,
             });
-        });
+        }));
 
     // ─── Console ───────────────────────────────────────────────────────────
     device
         .command('console <deviceId>')
         .description('Open an interactive terminal on the device')
-        .action(async (deviceId) => {
+        .action((deviceId) => runInteractive(() => {
             ensureConfigured();
-            try {
-                await connectToDeviceConsole(deviceId);
-            } catch (error) {
-                console.error(chalk.red(`Error: ${error.message}`));
-                process.exit(1);
-            }
-        });
+            return connectToDeviceConsole(deviceId);
+        }));
 
     // ─── Status ────────────────────────────────────────────────────────────
     device
