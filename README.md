@@ -79,6 +79,13 @@ and emits a single envelope on exit.
 
 ### Available Commands
 
+All device- and product-scoped actions follow a **subcommand-first**
+shape: the action comes before the target id, matching patterns like
+`kubectl describe pod <name>` or `git remote add <name> <url>`.
+
+    thinr device <action>  <deviceId>  [args...] [options]
+    thinr product <action> <productId> [args...] [options]
+
 #### Device
 
 Listing devices:
@@ -92,35 +99,37 @@ thinr devices [--json]
 Connect to a device's terminal:
 
 ```bash
-thinr device <deviceId> console
+thinr device console <deviceId>
 ```
 
 ##### Proxy
 
-Create a TCP or HTTP proxy to a remote device:
+Create a TCP, TLS or HTTP proxy to a remote device:
 
 ```bash
-thinr device <deviceId> tcp <target> [options]
-thinr device <deviceId> tls <target> [options]
-thinr device <deviceId> http <taget> [options]
+thinr device tcp  <deviceId> [target] [options]
+thinr device tls  <deviceId> [target] [options]
+thinr device http <deviceId> [target] [options]
 ```
 
-The target being the remote address and port on the device (defaults: tcp: 22, http: 80, tls: 443, and localhost for the target address).
+`target` is the remote address and port on the device. Defaults: tcp
+22, tls 443, http 80 — resolved against localhost when no address is
+given.
 
 Options:
-- `-w, --web`: Create an HTTP proxy for web interface instead of TCP
-- `--no-open`: Do not open browser automatically (web mode only)
+- `-p, --port <port>`: Local port to bind (default: random)
+- `--no-open`: Do not open the browser automatically (http only)
 
 Examples:
 ```bash
-# Create a TCP proxy to SSH
-thinr device RevPi20679 tcp 22
+# TCP proxy to SSH
+thinr device tcp RevPi20679 22
 
-# Create a proxy to a specific port with SSL
-thinr device RevPi20679 http 8080
+# HTTP proxy to a specific port
+thinr device http RevPi20679 8080
 
-# Create a proxy to a specific address
-thinr device RevPi20679 http http://192.168.1.45:8080
+# HTTP proxy to a specific address on the device
+thinr device http RevPi20679 http://192.168.1.45:8080
 ```
 
 ##### Status
@@ -128,76 +137,73 @@ thinr device RevPi20679 http http://192.168.1.45:8080
 Check the connection status of a device:
 
 ```bash
-thinr device <deviceId> status [options]
+thinr device status <deviceId> [options]
 ```
 
 Options:
-- `-j, --json`: Output the status in JSON format
+- `-j, --json`: Output as JSON
 
 ##### Property
 
-Retrieve the properties of a device:
+List the properties of a device:
 
 ```bash
-thinr device <deviceId> property [options]
+thinr device property <deviceId>
 ```
 
-Retrieve a property from a device:
+Read one property:
 
 ```bash
-thinr device <deviceId> property <propertyId> [options]
+thinr device property <deviceId> <propertyId> [options]
 ```
 
 Options:
-- `-j, --json`: Output the status in JSON format
-- `-f, --field`: Field to extract from the property or resource (e.g., -f data.value)
+- `-j, --json`: Output as JSON
+- `-f, --field <field>`: Extract a sub-field via dot path (e.g., `-f data.value`)
 
 ##### Resource
 
-Get the available resources of a device:
+List the resources of a device (with `in`/`out` schemas):
 
 ```bash
-thinr device <deviceId> resource [options]
+thinr device resource <deviceId>
+```
+
+Call a resource:
+
+```bash
+thinr device resource <deviceId> <resourceId> [options]
 ```
 
 Options:
-- `-j, --json`: Output the status in JSON format
-
-Execute a resource on a device:
-
-```bash
-thinr device <deviceId> resource <resourceId> [options]
-```
-
-Options:
-- `-i, --input`: Input for the resource (e.g., -i param1=value1 -i param2=value2)
-- `-j, --json`: Output the status in JSON format
-- `-f, --field`: Field to extract from the property or resource (e.g., -f data.value)
+- `-i, --input <key=value>`: Input for the resource (repeatable)
+- `-j, --json`: Output as JSON
+- `-f, --field <field>`: Extract a sub-field from the result (dot path)
 
 ##### Product
 
-Iterate over all devices of a specific product in order to retrieve a property or execute a resource:
+Fan out across every device of a product:
 
 ```bash
-thinr product <productId> property [options]
-thinr product <productId> resource [options]
+thinr product property <productId> <propertyId> [options]
+thinr product resource <productId> <resourceName> [options]
 ```
 
 Options:
 - `-j, --json`: Output as JSON (one envelope with `results[]` per device, each with its own `ok`)
-- `-f, --field`: Field to extract from the property or resource (e.g., -f data.value)
-- `-g, --group`: Filter devices by asset group
+- `-f, --field <field>`: Extract a sub-field from each result (dot path)
+- `-g, --group <group>`: Filter devices by asset group
 - `-a, --all`: Include offline devices (for `property` only)
 
-Options for executing a resource:
-- `-i, --input`: Input for the resource (e.g., -i param1=value1 -i param2=value2)
+Options for `resource`:
+- `-i, --input <key=value>`: Input for the resource (repeatable)
 
 ##### Exec
 
-Run a command on the device and stream its stdout/stderr back:
+Run a command on the device and stream stdout/stderr back:
 
 ```bash
-thinr device <deviceId> exec "<command>" [options]
+thinr device exec <deviceId> "<command>" [options]
 ```
 
 Options:
@@ -211,8 +217,8 @@ The process exits with the remote command's exit code.
 Check for or apply an agent update on the device:
 
 ```bash
-thinr device <deviceId> update check [options]
-thinr device <deviceId> update apply [options]
+thinr device update check <deviceId> [options]
+thinr device update apply <deviceId> [options]
 ```
 
 Options:
