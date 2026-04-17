@@ -26,12 +26,20 @@ export function registerListCommand(device) {
                 if (isJsonMode()) {
                     printOk(devices);
                 } else {
+                    // Pad the device id column so trailing names line up
+                    // even when ids have very different widths — same
+                    // treatment as thinr product list.
+                    const idWidth = devices.reduce(
+                        (w, d) => Math.max(w, d.device.length),
+                        0,
+                    );
                     for (const d of devices) {
                         const online = d.connection?.active
                             ? success('online ')
                             : hint('offline');
-                        const name = d.name ? hint(` (${d.name})`) : '';
-                        console.log(`  ${online}  ${label(d.device)}${name}`);
+                        const name = d.name ? hint(`(${d.name})`) : '';
+                        const id = label(d.device.padEnd(idWidth));
+                        console.log(`  ${online}  ${id}${name ? '  ' + name : ''}`);
                     }
                 }
             } catch (error) {
