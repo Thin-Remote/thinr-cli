@@ -2,6 +2,7 @@
 import { createDeviceAPI } from '../../lib/device-api.js';
 import { isJsonMode, printOk, printErr, createSpinner, classifyError } from '../../lib/output.js';
 import { label as labelText, accent } from '../../lib/format.js';
+import { TIMEOUTS } from '../../lib/constants.js';
 import { applyJsonFlag, ensureConfigured, getGlobalUser } from './_shared.js';
 
 const runUpdate = async (action, deviceId, opts, cmd) => {
@@ -13,7 +14,8 @@ const runUpdate = async (action, deviceId, opts, cmd) => {
     const spinner = createSpinner(`${phase} on ${deviceId}...`).start();
     try {
         const api = createDeviceAPI(deviceId, { user });
-        const timeout = action === 'apply' ? 300000 : 30000;
+        const timeout =
+            action === 'apply' ? TIMEOUTS.DEVICE_UPDATE_APPLY_MS : TIMEOUTS.DEVICE_RESOURCE_CALL_MS;
         const result = await api.callResource('update', { action, channel }, { timeout });
         spinner.succeed(`${phase} finished`);
         if (isJsonMode()) {

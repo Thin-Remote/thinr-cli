@@ -5,7 +5,7 @@ import {
     formatDeviceResourcesWithSchemas,
 } from '../../lib/resource.js';
 import { isJsonMode, printOk, printErr, createSpinner, classifyError } from '../../lib/output.js';
-import { applyJsonFlag, collectInput, ensureConfigured } from './_shared.js';
+import { applyJsonFlag, collectInput, ensureConfigured, extractField } from './_shared.js';
 
 export function registerResourceCommand(device) {
     device
@@ -38,9 +38,7 @@ export function registerResourceCommand(device) {
             try {
                 const result = await callDeviceResource(deviceId, resource, opts.input);
                 spinner.succeed(`Resource ${resource} returned successfully for ${deviceId}`);
-                const value = opts.field
-                    ? opts.field.split('.').reduce((obj, key) => obj && obj[key], result)
-                    : result;
+                const value = extractField(result, opts.field);
                 if (isJsonMode()) printOk(value);
                 else console.log(value);
             } catch (error) {

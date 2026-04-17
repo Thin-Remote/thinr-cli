@@ -36,7 +36,7 @@ import { authenticate } from '../lib/auth.js';
 import { deviceCommand } from '../commands/device/index.js';
 import { logoutCommand } from '../commands/logout.js';
 import { playbookCommand } from '../commands/playbook/index.js';
-import { productCommand } from '../commands/product.js';
+import { productCommand } from '../commands/product/index.js';
 import { profileCommand } from '../commands/profile.js';
 import { setBaseURL } from '../lib/api.js';
 import { startMCPServer } from '../lib/mcp/server.js';

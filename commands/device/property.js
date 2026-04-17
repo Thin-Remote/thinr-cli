@@ -6,7 +6,7 @@ import {
     formatDeviceProperties,
 } from '../../lib/property.js';
 import { isJsonMode, printOk, printErr, createSpinner, classifyError } from '../../lib/output.js';
-import { applyJsonFlag, ensureConfigured } from './_shared.js';
+import { applyJsonFlag, ensureConfigured, extractField } from './_shared.js';
 
 export function registerPropertyCommand(device) {
     device
@@ -36,9 +36,7 @@ export function registerPropertyCommand(device) {
             try {
                 const property = await getDeviceProperty(deviceId, propertyId);
                 spinner.succeed(`Property ${propertyId} for ${deviceId} found`);
-                const value = opts.field
-                    ? opts.field.split('.').reduce((obj, key) => obj && obj[key], property)
-                    : property;
+                const value = extractField(property, opts.field);
                 if (isJsonMode()) printOk(value);
                 else if (opts.field) console.log(value);
                 else console.log(formatDeviceProperty(deviceId, propertyId, property));
