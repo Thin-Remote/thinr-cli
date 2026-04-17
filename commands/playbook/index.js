@@ -10,6 +10,7 @@ import { registerValidateCommand } from './validate.js';
 export function playbookCommand(program) {
     const playbook = program
         .command('playbook')
+        .helpGroup('Operations:')
         .description('Run declarative YAML playbooks against the fleet');
 
     registerRunCommand(playbook);

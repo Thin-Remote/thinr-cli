@@ -7,6 +7,7 @@ import { applyJsonFlag, ensureConfigured, getGlobalUser } from './_shared.js';
 export function registerListCommand(device) {
     device
         .command('list [pattern]')
+        .helpGroup('Discovery:')
         .description(
             'List devices, optionally filtered by name/id pattern (case-insensitive regex)',
         )

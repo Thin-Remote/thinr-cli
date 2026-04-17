@@ -7,6 +7,7 @@ import { applyJsonFlag } from './_shared.js';
 export function registerValidateCommand(playbook) {
     playbook
         .command('validate <file>')
+        .helpGroup('Playbook:')
         .description('Parse and validate a playbook without running it')
         .option('-j, --json', 'Output as JSON')
         .action((file, opts) => {

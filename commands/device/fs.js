@@ -14,6 +14,7 @@ import { applyJsonFlag, ensureConfigured, getGlobalUser } from './_shared.js';
 export function registerFsCommands(device) {
     device
         .command('ls <deviceId> [path]')
+        .helpGroup('Filesystem:')
         .description('List a directory on the device')
         .option('-j, --json', 'Output as JSON')
         .option('-a, --all', 'Include hidden entries (dotfiles)')
@@ -46,6 +47,7 @@ export function registerFsCommands(device) {
 
     device
         .command('cat <deviceId> <path>')
+        .helpGroup('Filesystem:')
         .description('Print the contents of a remote file to stdout')
         .option('-j, --json', 'Output as JSON')
         .action(async (deviceId, path, opts, cmd) => {
@@ -70,6 +72,7 @@ export function registerFsCommands(device) {
 
     device
         .command('mkdir <deviceId> <path>')
+        .helpGroup('Filesystem:')
         .description('Create a directory on the device')
         .option('-j, --json', 'Output as JSON')
         .action(async (deviceId, path, opts, cmd) => {
@@ -91,6 +94,7 @@ export function registerFsCommands(device) {
 
     device
         .command('rm <deviceId> <path>')
+        .helpGroup('Filesystem:')
         .description(
             'Delete a file or directory on the device (pass --recursive for directories with contents)',
         )
@@ -116,6 +120,7 @@ export function registerFsCommands(device) {
 
     device
         .command('mv <deviceId> <source> <destination>')
+        .helpGroup('Filesystem:')
         .description('Move or rename a file or directory on the device')
         .option('-j, --json', 'Output as JSON')
         .option('-f, --force', 'Overwrite destination if it already exists')

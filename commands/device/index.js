@@ -20,6 +20,7 @@ import { registerFsCommands } from './fs.js';
 export function deviceCommand(program) {
     const device = program
         .command('device')
+        .helpGroup('Operations:')
         .description('Device commands (subcommand-first: thinr device <action> <deviceId>)');
 
     registerListCommand(device);

@@ -7,6 +7,7 @@ import { applyJsonFlag, ensureConfigured } from './_shared.js';
 export function registerStatusCommand(device) {
     device
         .command('status <deviceId>')
+        .helpGroup('Discovery:')
         .description('Check device status, data transfer and the latest monitoring sample')
         .option('-j, --json', 'Output as JSON')
         .action(async (deviceId, opts) => {

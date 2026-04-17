@@ -67,6 +67,7 @@ logoutCommand(program);
 
 program
     .command('mcp')
+    .helpGroup('Integration:')
     .description('Start the MCP server (stdio) for AI tool integration')
     .action(async () => {
         try {

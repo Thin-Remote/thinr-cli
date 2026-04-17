@@ -76,10 +76,12 @@ async function fetchProductDevices(productId, group, user) {
 export function productCommand(program) {
     const product = program
         .command('product')
+        .helpGroup('Operations:')
         .description('Product commands (subcommand-first: thinr product <action> <productId>)');
 
     product
         .command('list')
+        .helpGroup('Discovery:')
         .description('List every product configured on the server')
         .option('-j, --json', 'Output as JSON')
         .option(
@@ -146,6 +148,7 @@ export function productCommand(program) {
 
     product
         .command('property <productId> <propertyId>')
+        .helpGroup('Fan-out:')
         .description('Read a property on every device of the product')
         .option('-j, --json', 'Output as JSON')
         .option('-f, --field <field>', 'Extract a sub-field from each property (dot path)')
@@ -203,6 +206,7 @@ export function productCommand(program) {
 
     product
         .command('resource <productId> <resource>')
+        .helpGroup('Fan-out:')
         .description('Call a resource on every active device of the product')
         .option('-j, --json', 'Output as JSON')
         .option('-f, --field <field>', 'Extract a sub-field from each result (dot path)')
@@ -259,6 +263,7 @@ export function productCommand(program) {
 
     product
         .command('exec <productId> <command...>')
+        .helpGroup('Fan-out:')
         .description(
             'Execute a shell command in parallel on every active device of the product',
         )
@@ -486,6 +491,7 @@ export function productCommand(program) {
 
     product
         .command('status <productId>')
+        .helpGroup('Discovery:')
         .description('Snapshot of every device in the product (status + monitoring)')
         .option('-j, --json', 'Output as JSON')
         .option('-g, --group <group>', 'Filter devices by asset group')
@@ -676,6 +682,7 @@ export function productCommand(program) {
     const registerProductFsCommand = ({ name, description, args, build, perDeviceLabel }) => {
         const cmd = product
             .command(`${name} ${args}`)
+            .helpGroup('Filesystem:')
             .description(description)
             .option('-j, --json', 'Output as JSON')
             .option('-g, --group <group>', 'Filter devices by asset group')
@@ -836,6 +843,7 @@ export function productCommand(program) {
 
     product
         .command('push <productId> <localPath> <remotePath>')
+        .helpGroup('Filesystem:')
         .description('Upload a local file to every active device of a product, in parallel')
         .option('-j, --json', 'Output as JSON')
         .option('-g, --group <group>', 'Filter devices by asset group')

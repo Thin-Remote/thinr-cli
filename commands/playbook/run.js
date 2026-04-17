@@ -22,6 +22,7 @@ import {
 export function registerRunCommand(playbook) {
     playbook
         .command('run <file>')
+        .helpGroup('Playbook:')
         .description('Run a playbook against the product / devices declared in its target block')
         .option('-j, --json', 'Output as JSON')
         .option('--dry-run', 'Print the plan without executing anything')

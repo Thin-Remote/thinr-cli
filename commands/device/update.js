@@ -35,7 +35,10 @@ const runUpdate = async (action, deviceId, opts, cmd) => {
 };
 
 export function registerUpdateCommand(device) {
-    const update = device.command('update').description('Check for or apply agent updates');
+    const update = device
+        .command('update')
+        .helpGroup('Execution:')
+        .description('Check for or apply agent updates');
 
     update
         .command('check <deviceId>')

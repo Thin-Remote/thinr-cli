@@ -9,6 +9,7 @@ import { warning, error, hint } from '../lib/format.js';
 export function logoutCommand(program) {
     program
         .command('logout')
+        .helpGroup('Configuration:')
         .description('Remove stored credentials and configuration')
         .action(async () => {
             // Check if configured

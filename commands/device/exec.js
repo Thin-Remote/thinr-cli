@@ -7,6 +7,7 @@ import { applyJsonFlag, ensureConfigured, getGlobalUser } from './_shared.js';
 export function registerExecCommand(device) {
     device
         .command('exec <deviceId> <command...>')
+        .helpGroup('Execution:')
         .description('Execute a shell command on the device')
         .option('-j, --json', 'Buffer stdout/stderr and emit a single JSON envelope')
         .option('--legacy', 'Use the non-streaming one-shot API (older agents)')

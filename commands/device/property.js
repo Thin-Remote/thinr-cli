@@ -11,6 +11,7 @@ import { applyJsonFlag, ensureConfigured } from './_shared.js';
 export function registerPropertyCommand(device) {
     device
         .command('property <deviceId> [propertyId]')
+        .helpGroup('State & resources:')
         .description('List device properties, or read one by ID')
         .option('-j, --json', 'Output as JSON')
         .option('-f, --field <field>', 'Extract a sub-field (dot path, e.g. data.value)')

@@ -13,10 +13,14 @@ function applyJsonFlag(opts) {
 }
 
 export function profileCommand(program) {
-    const profile = program.command('profile').description('Manage configuration profiles');
+    const profile = program
+        .command('profile')
+        .helpGroup('Configuration:')
+        .description('Manage configuration profiles');
 
     profile
         .command('list')
+        .helpGroup('Profile:')
         .description('List configured profiles')
         .option('-j, --json', 'Output as JSON')
         .action((opts) => {
@@ -50,6 +54,7 @@ export function profileCommand(program) {
 
     profile
         .command('current')
+        .helpGroup('Profile:')
         .description('Print the active profile')
         .option('-j, --json', 'Output as JSON')
         .action((opts) => {
@@ -68,6 +73,7 @@ export function profileCommand(program) {
 
     profile
         .command('use <name>')
+        .helpGroup('Profile:')
         .description('Set the default profile')
         .option('-j, --json', 'Output as JSON')
         .action((name, opts) => {
@@ -87,6 +93,7 @@ export function profileCommand(program) {
 
     profile
         .command('delete <name>')
+        .helpGroup('Profile:')
         .description('Remove a profile')
         .option('-j, --json', 'Output as JSON')
         .action((name, opts) => {

@@ -10,6 +10,7 @@ import { applyJsonFlag, collectInput, ensureConfigured } from './_shared.js';
 export function registerResourceCommand(device) {
     device
         .command('resource <deviceId> [resource]')
+        .helpGroup('State & resources:')
         .description('List device resources, or call one by name')
         .option('-j, --json', 'Output as JSON')
         .option('-f, --field <field>', 'Extract a sub-field from the result (dot path)')
