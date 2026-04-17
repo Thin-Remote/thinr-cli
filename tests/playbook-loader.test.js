@@ -157,11 +157,17 @@ steps:
   - action: write
     path: /tmp/x
     content: y
-  - action: delete
+  - action: push
+    source: local.txt
+    destination: /tmp/x
+  - action: pull
+    source: /tmp/x
+    destination: local.txt
+  - action: rm
     path: /tmp/x
   - action: mkdir
     path: /tmp/d
-  - action: move
+  - action: mv
     source: /tmp/a
     destination: /tmp/b
   - action: property_set
@@ -182,9 +188,11 @@ steps:
             'exec',
             'sleep',
             'write',
-            'delete',
+            'push',
+            'pull',
+            'rm',
             'mkdir',
-            'move',
+            'mv',
             'property_set',
             'resource',
             'update',

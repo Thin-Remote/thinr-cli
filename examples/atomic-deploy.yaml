@@ -29,7 +29,7 @@ steps:
           {"version": "2.1.0", "feature_x": true}
 
     - name: Move staging into place
-      action: move
+      action: mv
       source: "{{ staging_path }}"
       destination: "{{ target_path }}"
       overwrite: true

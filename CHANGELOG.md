@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Unified filesystem verbs across CLI, MCP and playbooks so the same
+  eight nouns mean the same thing everywhere: `read` / `write`
+  (inline content) · `push` / `pull` (local ↔ remote file transfer)
+  · `ls` · `mkdir` · `rm` · `mv`.
+- CLI: `thinr device cat` is now `thinr device read` (`cat` kept as
+  a hidden alias). New `thinr device write <deviceId> <path>
+  [content]` accepts the payload as an argument or on stdin.
+- MCP: `thinr_delete` renamed to `thinr_rm`, `thinr_move` renamed to
+  `thinr_mv`. No backwards-compatibility aliases.
+- Playbook actions: `delete` → `rm`, `move` → `mv`. The `write`
+  action now only accepts inline `content`; use the new `push`
+  action to upload a local file (`source`, `destination`). New
+  `pull` action downloads a remote file to the local disk.
+
 ## [1.2.0] - 2026-04-16
 
 ### Added

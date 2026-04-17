@@ -392,7 +392,7 @@ target any device/account/environment without restart.
 | --------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | Discovery             | `thinr_devices` (with optional `query` for regex filtering), `thinr_device_info`, `thinr_profiles`                    |
 | Shell                 | `thinr_exec` (buffered), with streaming stdout/stderr                                                                 |
-| Filesystem            | `thinr_read`, `thinr_write`, `thinr_ls`, `thinr_mkdir`, `thinr_delete`, `thinr_move`                                  |
+| Filesystem            | `thinr_read`, `thinr_write`, `thinr_ls`, `thinr_mkdir`, `thinr_rm`, `thinr_mv`                                        |
 | Resources             | `thinr_resource_list` (with `in`/`out` schemas), `thinr_resource_call`                                                |
 | Properties            | `thinr_property_get`, `thinr_property_set`                                                                            |
 | Scripts (device)      | `thinr_script_list`, `thinr_script_write`, `thinr_script_delete`                                                      |

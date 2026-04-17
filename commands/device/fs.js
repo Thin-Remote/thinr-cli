@@ -6,10 +6,10 @@ import { applyJsonFlag, ensureConfigured, getGlobalUser } from './_shared.js';
 
 /**
  * Plain filesystem operations on a single device, mirroring the
- * six MCP filesystem tools (ls, read/write, mkdir, delete, move)
- * with CLI-native verbs. `push`/`pull` handle file transfer and
- * live in transfer.js; this file keeps the rest of the toolbox
- * together.
+ * MCP filesystem tools with CLI-native verbs. Two semantic families:
+ *   · read / write — inline content (strings, small files)
+ *   · push / pull  — file transfer with progress (in transfer.js)
+ * Plus ls, mkdir, rm, mv for directory housekeeping.
  */
 export function registerFsCommands(device) {
     device
@@ -46,7 +46,8 @@ export function registerFsCommands(device) {
         });
 
     device
-        .command('cat <deviceId> <path>')
+        .command('read <deviceId> <path>')
+        .alias('cat')
         .helpGroup('Filesystem:')
         .description('Print the contents of a remote file to stdout')
         .option('-j, --json', 'Output as JSON')
@@ -65,6 +66,45 @@ export function registerFsCommands(device) {
                 process.stdout.write(text);
                 if (text && !text.endsWith('\n')) process.stdout.write('\n');
             } catch (err) {
+                const { message, code } = classifyError(err);
+                printErr(message, { code });
+            }
+        });
+
+    device
+        .command('write <deviceId> <path> [content]')
+        .helpGroup('Filesystem:')
+        .description(
+            'Write inline content to a remote file (use `push` for large local files). Reads from stdin when <content> is omitted.',
+        )
+        .option('-j, --json', 'Output as JSON')
+        .action(async (deviceId, path, content, opts, cmd) => {
+            applyJsonFlag(opts);
+            ensureConfigured();
+            const user = getGlobalUser(cmd);
+            const spinner = createSpinner(`Writing ${deviceId}:${path}...`).start();
+            try {
+                let payload;
+                if (typeof content === 'string') {
+                    payload = Buffer.from(content, 'utf8');
+                } else if (!process.stdin.isTTY) {
+                    payload = await readAllStdin();
+                } else {
+                    spinner.stop();
+                    printErr(
+                        'No content given. Pass it as the third argument or pipe it on stdin.',
+                        { code: 'input_error' },
+                    );
+                    return;
+                }
+                const api = createDeviceAPI(deviceId, { user });
+                await api.writeFile(path, payload);
+                spinner.succeed(success(`Wrote ${payload.byteLength} bytes to ${deviceId}:${path}`));
+                if (isJsonMode()) {
+                    printOk({ device: deviceId, path, bytes: payload.byteLength });
+                }
+            } catch (err) {
+                spinner.fail('write failed');
                 const { message, code } = classifyError(err);
                 printErr(message, { code });
             }
@@ -142,4 +182,12 @@ export function registerFsCommands(device) {
                 printErr(message, { code });
             }
         });
+}
+
+async function readAllStdin() {
+    const chunks = [];
+    for await (const chunk of process.stdin) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
 }
