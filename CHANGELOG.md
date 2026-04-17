@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.2.0] - 2026-04-16
+
+### Added
+
+- `thinr product exec <productId> <command...>` — run a shell command
+  in parallel on every active device of a product, with bounded
+  concurrency (`-c, --concurrency`, default 10), per-device timeout
+  (`--timeout`, default 30 s), `--fail-fast`, asset-group filter
+  (`-g, --group`) and an `-a, --all` switch to include offline
+  devices. Live progress shows a single spinner with done/total
+  counters; the final render uses a `cli-table3` table per device
+  plus a compact `Output:` section and a one-line totals bar.
+- `thinr_product_exec` MCP tool — the same fan-out as the CLI
+  subcommand, returning a consolidated text report so an AI agent
+  can roll out a change across a whole fleet in a single call
+  instead of looping `thinr_exec` per device.
+- `lib/concurrency.js#runPool` — tiny helper used by both entry
+  points; keeps at most N workers in flight and returns a parallel
+  results array. `runPool` plus an internal try/catch in each worker
+  keeps fleet-wide errors localised per device.
+
+### Changed
+
+- `cli-table3` added as a direct dependency to render the
+  product-exec summary.
+
 ## [1.1.0] - 2026-04-16
 
 Major release: MCP server for AI clients, subcommand-first CLI, JSON
@@ -128,6 +154,7 @@ consistent error taxonomy across both interfaces.
 - Property listing and retrieval
 - Device resource listing and execution
 
+[1.2.0]: https://github.com/Thin-Remote/thinr-cli/compare/1.1.0...1.2.0
 [1.1.0]: https://github.com/Thin-Remote/thinr-cli/compare/1.0.2...1.1.0
 [1.0.2]: https://github.com/Thin-Remote/thinr-cli/compare/1.0.1...1.0.2
 [1.0.1]: https://github.com/Thin-Remote/thinr-cli/compare/1.0.0...1.0.1

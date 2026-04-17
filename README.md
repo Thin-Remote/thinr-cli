@@ -299,6 +299,44 @@ Options:
 Offline devices are skipped for `resource` — the server would reject
 the call anyway.
 
+#### `exec`
+
+Run a shell command in parallel across every active device of the
+product and report a per-device status table plus each device's
+output:
+
+```bash
+thinr product exec <productId> <command...> [options]
+```
+
+Options:
+
+- `-j, --json`: Output as JSON. Emits a single envelope with a
+  `summary` block and a `results[]` array carrying stdout, stderr,
+  exit code, `timedOut` flag and per-device duration.
+- `-c, --concurrency <n>`: Max parallel executions (default: 10)
+- `--timeout <seconds>`: Per-device timeout (default: 30)
+- `--fail-fast`: Stop dequeueing new devices as soon as one fails
+- `-g, --group <group>`: Filter devices by asset group
+- `-a, --all`: Include offline devices (default: only active)
+
+Examples:
+
+```bash
+# hostname on every active device
+thinr product exec my-product hostname
+
+# apt upgrade across the fleet with 5 parallel slots and a long timeout
+thinr product exec my-product "apt-get -y upgrade" -c 5 --timeout 600
+
+# target only a subset of the product
+thinr product exec my-product "systemctl restart agent" -g staging
+```
+
+Also exposed as an MCP tool (`thinr_product_exec`) with the same
+parameters, so agents can drive a fleet operation with a single call
+instead of looping `thinr_exec` per device.
+
 ### `thinr profile`
 
 Manage the profile store (see [Profiles and multi-account
