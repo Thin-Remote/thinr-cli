@@ -8,6 +8,7 @@ import { filterActiveDevices, getDevices } from '../lib/devices.js';
 import { createDeviceAPI } from '../lib/device-api.js';
 import { runPool } from '../lib/concurrency.js';
 import { getMonitoringData } from '../lib/monitoring.js';
+import { formatUptime, colorPct } from '../lib/format.js';
 import {
     setJsonMode,
     isJsonMode,
@@ -49,25 +50,6 @@ function parsePositiveInt(label) {
         }
         return n;
     };
-}
-
-function formatUptime(seconds) {
-    if (!Number.isFinite(seconds) || seconds < 0) return '—';
-    const d = Math.floor(seconds / 86400);
-    const h = Math.floor((seconds % 86400) / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    if (d > 0) return `${d}d${h}h`;
-    if (h > 0) return `${h}h${m}m`;
-    if (m > 0) return `${m}m`;
-    return `${Math.floor(seconds)}s`;
-}
-
-function colorPct(v) {
-    if (v == null || !Number.isFinite(v)) return chalk.dim('—');
-    const s = `${v.toFixed(0)}%`;
-    if (v >= 90) return chalk.red(s);
-    if (v >= 70) return chalk.yellow(s);
-    return chalk.green(s);
 }
 
 async function fetchProductDevices(productId, group, user) {
