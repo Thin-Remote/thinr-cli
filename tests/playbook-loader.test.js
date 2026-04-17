@@ -145,6 +145,54 @@ steps:
         );
     });
 
+    it('accepts the full v1 action catalogue', () => {
+        const pb = parsePlaybook(`
+target:
+  product: demo
+steps:
+  - action: exec
+    command: echo
+  - action: sleep
+    seconds: 1
+  - action: write
+    path: /tmp/x
+    content: y
+  - action: delete
+    path: /tmp/x
+  - action: mkdir
+    path: /tmp/d
+  - action: move
+    source: /tmp/a
+    destination: /tmp/b
+  - action: property_set
+    property: ver
+    value: "1"
+  - action: resource
+    resource: agent
+  - action: update
+    op: check
+  - action: script_install
+    name: demo.sh
+    content: "#!/bin/sh"
+  - action: script_delete
+    name: demo.sh
+`);
+        const actions = pb.steps.map((s) => s.action);
+        assert.deepEqual(actions, [
+            'exec',
+            'sleep',
+            'write',
+            'delete',
+            'mkdir',
+            'move',
+            'property_set',
+            'resource',
+            'update',
+            'script_install',
+            'script_delete',
+        ]);
+    });
+
     it('accumulates multiple validation errors into a single message', () => {
         try {
             parsePlaybook(`
