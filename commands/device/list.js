@@ -1,8 +1,13 @@
 // @ts-check
 import { getDevices } from '../../lib/devices.js';
-import { isJsonMode, printOk, printErr, createSpinner, classifyError } from '../../lib/output.js';
+import { isJsonMode, printOk } from '../../lib/output.js';
 import { success, hint, label } from '../../lib/format.js';
-import { applyJsonFlag, ensureConfigured, getGlobalUser } from './_shared.js';
+import {
+    applyJsonFlag,
+    ensureConfigured,
+    getGlobalUser,
+    runDeviceCommand,
+} from './_shared.js';
 
 export function registerListCommand(device) {
     device
@@ -17,16 +22,18 @@ export function registerListCommand(device) {
             ensureConfigured();
             const user = getGlobalUser(cmd);
             const filter = pattern ? { name: pattern } : {};
-            const spinnerLabel = pattern
-                ? `Searching devices matching "${pattern}"...`
-                : 'Fetching devices...';
-            const spinner = createSpinner(spinnerLabel).start();
-            try {
-                const devices = await getDevices(filter, user);
-                spinner.succeed(`Found ${devices.length} device(s)`);
-                if (isJsonMode()) {
-                    printOk(devices);
-                } else {
+            await runDeviceCommand({
+                start: pattern
+                    ? `Searching devices matching "${pattern}"...`
+                    : 'Fetching devices...',
+                fn: () => getDevices(filter, user),
+                success: (devices) => `Found ${devices.length} device(s)`,
+                failure: 'Failed to list devices',
+                onSuccess: (devices) => {
+                    if (isJsonMode()) {
+                        printOk(devices);
+                        return;
+                    }
                     // Pad the device id column so trailing names line up
                     // even when ids have very different widths — same
                     // treatment as thinr product list.
@@ -42,11 +49,7 @@ export function registerListCommand(device) {
                         const id = label(d.device.padEnd(idWidth));
                         console.log(`  ${online}  ${id}${name ? '  ' + name : ''}`);
                     }
-                }
-            } catch (error) {
-                spinner.fail('Failed to list devices');
-                const { message, code } = classifyError(error);
-                printErr(message, { code });
-            }
+                },
+            });
         });
 }

@@ -1,7 +1,14 @@
 // @ts-check
 import { InvalidArgumentError } from 'commander';
 import { configExists } from '../lib/config.js';
-import { setJsonMode, printErr } from '../lib/output.js';
+import {
+    setJsonMode,
+    isJsonMode,
+    printOk,
+    printErr,
+    createSpinner,
+    classifyError,
+} from '../lib/output.js';
 
 export function ensureConfigured() {
     if (!configExists()) {
@@ -100,5 +107,48 @@ export class ProgressSpinner {
 
     stop() {
         this.spinner.stop();
+    }
+}
+
+/**
+ * One-shot command skeleton shared by read-only device subcommands
+ * (status, list, property, resource…). Handles the spinner start,
+ * try/catch, `classifyError`+`printErr` on failure, and the
+ * `isJsonMode() ? printOk : console.log` default for the success path.
+ *
+ * Shape:
+ *   await runDeviceCommand({
+ *       start: 'Fetching devices…',          // spinner label
+ *       fn: () => getDevices(filter),        // async unit of work
+ *       success: n => `Found ${n} device(s)`,// string | (result) => string | null
+ *       failure: 'Failed to list devices',   // string on failure
+ *       onSuccess: (result) => { … },        // optional full render override
+ *   });
+ *
+ * When `success` is `null` the spinner just stops (no checkmark), which
+ * matches the idiom used by commands whose output block already speaks
+ * for the "found" state. When `onSuccess` is omitted the result is
+ * printed verbatim (`printOk` in JSON mode, `console.log` otherwise).
+ */
+export async function runDeviceCommand({ start, fn, success, failure, onSuccess }) {
+    const spinner = createSpinner(start).start();
+    try {
+        const result = await fn();
+        if (success === null) {
+            spinner.stop();
+        } else {
+            spinner.succeed(typeof success === 'function' ? success(result) : success);
+        }
+        if (onSuccess) {
+            await onSuccess(result);
+        } else if (isJsonMode()) {
+            printOk(result);
+        } else {
+            console.log(result);
+        }
+    } catch (error) {
+        spinner.fail(typeof failure === 'function' ? failure(error) : failure);
+        const { message, code } = classifyError(error);
+        printErr(message, { code });
     }
 }

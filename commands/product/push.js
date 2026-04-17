@@ -1,9 +1,8 @@
 // @ts-check
 import { readFile as readLocalFile } from 'fs/promises';
 import Table from 'cli-table3';
-import { filterActiveDevices } from '../../lib/devices.js';
 import { createDeviceAPI } from '../../lib/device-api.js';
-import { runPool } from '../../lib/concurrency.js';
+import { runProductFanOut } from '../../lib/product-orchestrator.js';
 import {
     label,
     muted,
@@ -26,7 +25,6 @@ import {
     parsePositiveInt,
     ProgressSpinner,
 } from '../_shared.js';
-import { fetchProductDevices } from './_shared.js';
 
 export function registerProductPushCommand(product) {
     product
@@ -57,18 +55,76 @@ export function registerProductPushCommand(product) {
                 return;
             }
 
-            const spinner = createSpinner(`Retrieving devices for product ${productId}...`).start();
-            let devices;
+            const fetchSpinner = createSpinner(
+                `Retrieving devices for product ${productId}...`,
+            ).start();
+            /** @type {ProgressSpinner | null} */
+            let progress = null;
+
+            let result;
             try {
-                devices = await fetchProductDevices(productId, opts.group, user);
-                spinner.succeed(`Found ${devices.length} device(s) in product ${productId}`);
+                result = await runProductFanOut({
+                    product: productId,
+                    group: opts.group,
+                    includeOffline: !!opts.all,
+                    user,
+                    concurrency: opts.concurrency,
+                    failFast: !!opts.failFast,
+                    worker: async (device) => {
+                        const api = createDeviceAPI(device.device, { user });
+                        const perStart = Date.now();
+                        try {
+                            await api.writeFile(remotePath, content);
+                            return {
+                                device: device.device,
+                                ok: true,
+                                bytes: content.byteLength,
+                                durationMs: Date.now() - perStart,
+                            };
+                        } catch (err) {
+                            return {
+                                device: device.device,
+                                ok: false,
+                                error: err instanceof Error ? err.message : String(err),
+                                durationMs: Date.now() - perStart,
+                            };
+                        }
+                    },
+                    skipped: (device, firstFailure) => ({
+                        device: device.device,
+                        ok: false,
+                        error: `skipped (fail-fast after ${firstFailure})`,
+                        durationMs: 0,
+                    }),
+                    isFailure: (entry) => !entry.ok,
+                    onDevicesResolved: (devices) => {
+                        fetchSpinner.succeed(
+                            `Found ${devices.length} device(s) in product ${productId}`,
+                        );
+                        if (devices.length > 0 && !isJsonMode()) {
+                            progress = new ProgressSpinner(
+                                createSpinner('').start(),
+                                devices.length,
+                                ({ done, total, inFlight }) =>
+                                    `Uploading ${localPath} → ${remotePath} on ${total} device(s) — ` +
+                                    `${done}/${total} done · ${inFlight} in flight` +
+                                    (opts.failFast ? ' · fail-fast' : ''),
+                            );
+                            progress.render();
+                        }
+                    },
+                    onItemStart: () => progress?.startItem(),
+                    onItemFinish: () => progress?.finishItem(),
+                });
             } catch (error) {
-                spinner.fail(`Failed to retrieve devices for product ${productId}`);
+                fetchSpinner.fail(`Failed to retrieve devices for product ${productId}`);
                 const { message, code } = classifyError(error);
                 printErr(message, { code });
                 return;
             }
-            if (!opts.all) devices = filterActiveDevices(devices);
+            progress?.stop();
+
+            const { devices, entries, durationMs } = result;
 
             if (devices.length === 0) {
                 if (isJsonMode()) {
@@ -85,61 +141,6 @@ export function registerProductPushCommand(product) {
                 return;
             }
 
-            const progress = new ProgressSpinner(
-                createSpinner('').start(),
-                devices.length,
-                ({ done, total, inFlight }) =>
-                    `Uploading ${localPath} → ${remotePath} on ${total} device(s) — ` +
-                    `${done}/${total} done · ${inFlight} in flight` +
-                    (opts.failFast ? ' · fail-fast' : ''),
-            );
-            progress.render();
-
-            const startTs = Date.now();
-            const poolResults = await runPool(
-                devices,
-                opts.concurrency,
-                async (device) => {
-                    progress.startItem();
-                    const perStart = Date.now();
-                    const api = createDeviceAPI(device.device, { user });
-                    try {
-                        await api.writeFile(remotePath, content);
-                        const durationMs = Date.now() - perStart;
-                        progress.finishItem();
-                        return {
-                            device: device.device,
-                            ok: true,
-                            bytes: content.byteLength,
-                            durationMs,
-                        };
-                    } catch (err) {
-                        const msg = err instanceof Error ? err.message : String(err);
-                        const durationMs = Date.now() - perStart;
-                        progress.finishItem();
-                        return {
-                            device: device.device,
-                            ok: false,
-                            error: msg,
-                            durationMs,
-                        };
-                    }
-                },
-                { failFast: !!opts.failFast },
-            );
-
-            progress.stop();
-
-            const entries = poolResults.map((r, i) => {
-                if (r && r.ok) return r.value;
-                return {
-                    device: devices[i].device,
-                    ok: false,
-                    error: 'unknown error',
-                    durationMs: 0,
-                };
-            });
-            const totalDurationMs = Date.now() - startTs;
             const okCount = entries.filter((e) => e.ok).length;
             const failCount = entries.length - okCount;
 
@@ -153,7 +154,7 @@ export function registerProductPushCommand(product) {
                         ok: okCount,
                         failed: failCount,
                         bytes: content.byteLength,
-                        durationMs: totalDurationMs,
+                        durationMs,
                     },
                     results: entries,
                 });
@@ -176,7 +177,7 @@ export function registerProductPushCommand(product) {
             console.log(table.toString());
             console.log(
                 hint(
-                    `${entries.length} total · ${okCount} ok · ${failCount} failed · ${content.byteLength} bytes · ${totalDurationMs}ms`,
+                    `${entries.length} total · ${okCount} ok · ${failCount} failed · ${content.byteLength} bytes · ${durationMs}ms`,
                 ),
             );
         });

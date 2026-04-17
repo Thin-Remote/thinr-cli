@@ -41,7 +41,6 @@ import { profileCommand } from '../commands/profile.js';
 import { setBaseURL } from '../lib/api.js';
 import { startMCPServer } from '../lib/mcp/server.js';
 
-// Function to display the banner
 function displayBanner() {
     console.log(accent(figlet.textSync('thinr-cli', { horizontalLayout: 'full' })));
     console.log(info('Thin Remote CLI - Remote management for IoT devices'));
@@ -50,7 +49,6 @@ function displayBanner() {
 
 const program = new Command();
 
-// Set up CLI information
 program
     .name('thinr')
     .description('CLI for ThinRemote - Remote management for IoT devices')
@@ -58,7 +56,6 @@ program
     .option('-u, --user <username>', 'API user override (admin impersonation)')
     .option('--profile <name>', 'Configuration profile to use (defaults to the saved default)');
 
-// Register commands
 deviceCommand(program);
 productCommand(program);
 playbookCommand(program);

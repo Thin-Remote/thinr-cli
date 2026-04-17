@@ -12,6 +12,7 @@ export {
     collectVar,
     extractField,
     ProgressSpinner,
+    runDeviceCommand,
 } from '../_shared.js';
 
 // Wrapper for the proxy / console handlers, which return a Promise that

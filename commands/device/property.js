@@ -5,8 +5,13 @@ import {
     getDeviceProperties,
     formatDeviceProperties,
 } from '../../lib/property.js';
-import { isJsonMode, printOk, printErr, createSpinner, classifyError } from '../../lib/output.js';
-import { applyJsonFlag, ensureConfigured, extractField } from './_shared.js';
+import { isJsonMode, printOk } from '../../lib/output.js';
+import {
+    applyJsonFlag,
+    ensureConfigured,
+    extractField,
+    runDeviceCommand,
+} from './_shared.js';
 
 export function registerPropertyCommand(device) {
     device
@@ -19,31 +24,29 @@ export function registerPropertyCommand(device) {
             applyJsonFlag(opts);
             ensureConfigured();
             if (!propertyId) {
-                const spinner = createSpinner(`Getting properties for ${deviceId}...`).start();
-                try {
-                    const result = await getDeviceProperties(deviceId);
-                    spinner.succeed(`Properties for ${deviceId} retrieved successfully`);
-                    if (isJsonMode()) printOk(result);
-                    else console.log(formatDeviceProperties(deviceId, result));
-                } catch (error) {
-                    spinner.fail('Property retrieval failed');
-                    const { message, code } = classifyError(error);
-                    printErr(message, { code });
-                }
+                await runDeviceCommand({
+                    start: `Getting properties for ${deviceId}...`,
+                    fn: () => getDeviceProperties(deviceId),
+                    success: `Properties for ${deviceId} retrieved successfully`,
+                    failure: 'Property retrieval failed',
+                    onSuccess: (result) => {
+                        if (isJsonMode()) printOk(result);
+                        else console.log(formatDeviceProperties(deviceId, result));
+                    },
+                });
                 return;
             }
-            const spinner = createSpinner(`Retrieving property for ${deviceId}...`).start();
-            try {
-                const property = await getDeviceProperty(deviceId, propertyId);
-                spinner.succeed(`Property ${propertyId} for ${deviceId} found`);
-                const value = extractField(property, opts.field);
-                if (isJsonMode()) printOk(value);
-                else if (opts.field) console.log(value);
-                else console.log(formatDeviceProperty(deviceId, propertyId, property));
-            } catch (error) {
-                spinner.fail('Property retrieval failed');
-                const { message, code } = classifyError(error);
-                printErr(message, { code });
-            }
+            await runDeviceCommand({
+                start: `Retrieving property for ${deviceId}...`,
+                fn: () => getDeviceProperty(deviceId, propertyId),
+                success: `Property ${propertyId} for ${deviceId} found`,
+                failure: 'Property retrieval failed',
+                onSuccess: (property) => {
+                    const value = extractField(property, opts.field);
+                    if (isJsonMode()) printOk(value);
+                    else if (opts.field) console.log(value);
+                    else console.log(formatDeviceProperty(deviceId, propertyId, property));
+                },
+            });
         });
 }
