@@ -667,7 +667,7 @@ export function productCommand(program) {
         });
 
     product
-        .command('cp <productId> <localPath> <remotePath>')
+        .command('push <productId> <localPath> <remotePath>')
         .description('Upload a local file to every active device of a product, in parallel')
         .option('-j, --json', 'Output as JSON')
         .option('-g, --group <group>', 'Filter devices by asset group')

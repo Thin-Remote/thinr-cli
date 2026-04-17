@@ -7,7 +7,7 @@ import { registerPropertyCommand } from './property.js';
 import { registerResourceCommand } from './resource.js';
 import { registerExecCommand } from './exec.js';
 import { registerUpdateCommand } from './update.js';
-import { registerCpCommand } from './cp.js';
+import { registerTransferCommands } from './transfer.js';
 
 /**
  * `thinr device <subcommand> [<deviceId>] …` — all device-scoped actions
@@ -29,5 +29,5 @@ export function deviceCommand(program) {
     registerResourceCommand(device);
     registerExecCommand(device);
     registerUpdateCommand(device);
-    registerCpCommand(device);
+    registerTransferCommands(device);
 }
