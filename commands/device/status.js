@@ -30,7 +30,10 @@ export function registerStatusCommand(device) {
                     monitoringResult.value.length > 0
                         ? monitoringResult.value[0]
                         : null;
-                spinner.succeed(`Device ${deviceId} found`);
+                // Stop the spinner without a success message — the detail
+                // block that follows already speaks for the "found" state,
+                // and the "not found" path surfaces its own clear error.
+                spinner.stop();
                 if (isJsonMode()) printOk({ ...status, monitoring });
                 else console.log(formatDeviceStatus(deviceId, status, monitoring));
             } catch (error) {
