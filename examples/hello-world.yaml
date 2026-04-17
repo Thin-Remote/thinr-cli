@@ -1,0 +1,30 @@
+# Simple playbook that runs `hostname` and `uptime` on every online
+# device of the `thinremote` product, pausing a second between steps.
+# Adapt the `target` block to your fleet before running.
+#
+#   thinr playbook run examples/hello-world.yaml --dry-run
+#   thinr playbook run examples/hello-world.yaml
+#
+name: Hello world
+description: Sanity playbook — runs two cheap commands on every device.
+
+target:
+    product: thinremote
+    concurrency: 5
+
+vars:
+    greeting: "hello from thinr"
+
+steps:
+    - name: Print device id
+      action: exec
+      command: "echo '{{ greeting }} · I am {{ device }}'"
+
+    - name: Show hostname
+      action: exec
+      command: hostname
+      pause_after: 1
+
+    - name: Show uptime
+      action: exec
+      command: uptime
