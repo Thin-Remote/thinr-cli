@@ -10,6 +10,7 @@ import { registerUpdateCommand } from './update.js';
 import { registerTransferCommands } from './transfer.js';
 import { registerFsCommands } from './fs.js';
 import { registerLogsCommand } from './logs.js';
+import { registerDashboardCommand } from './dashboard.js';
 
 /**
  * `thinr device <subcommand> [<deviceId>] …` — all device-scoped actions
@@ -35,4 +36,5 @@ export function deviceCommand(program) {
     registerTransferCommands(device);
     registerFsCommands(device);
     registerLogsCommand(device);
+    registerDashboardCommand(device);
 }
