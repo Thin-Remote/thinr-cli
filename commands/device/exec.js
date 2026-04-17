@@ -1,7 +1,7 @@
 // @ts-check
-import chalk from 'chalk';
 import { createDeviceAPI } from '../../lib/device-api.js';
 import { isJsonMode, printOk, printErr, classifyError } from '../../lib/output.js';
+import { error as errorStyle, warning } from '../../lib/format.js';
 import { applyJsonFlag, ensureConfigured, getGlobalUser } from './_shared.js';
 
 export function registerExecCommand(device) {
@@ -52,10 +52,10 @@ export function registerExecCommand(device) {
                 });
                 process.off('SIGINT', onSigint);
                 if (timedOut) {
-                    console.error(chalk.red('\nError: command timed out on the device.'));
+                    console.error(errorStyle('\nError: command timed out on the device.'));
                 }
                 if (cancelled) {
-                    console.error(chalk.yellow('\n[interrupted]'));
+                    console.error(warning('\n[interrupted]'));
                     process.exit(130);
                 }
                 process.exit(exitCode ?? 1);
@@ -65,10 +65,10 @@ export function registerExecCommand(device) {
                 // Human path: prefix `[code]` matches the MCP error format
                 // and the rest of the CLI; the response dump only surfaces
                 // when the failure carries an HTTP body.
-                console.error(chalk.red(`Error [${code}]: ${message}`));
+                console.error(errorStyle(`Error [${code}]: ${message}`));
                 if (error.response) {
-                    console.error(chalk.red(`Status: ${error.response.status}`));
-                    console.error(chalk.red(`Body: ${JSON.stringify(error.response.data)}`));
+                    console.error(errorStyle(`Status: ${error.response.status}`));
+                    console.error(errorStyle(`Body: ${JSON.stringify(error.response.data)}`));
                 }
                 process.exit(1);
             }

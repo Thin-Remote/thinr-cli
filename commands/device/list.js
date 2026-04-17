@@ -1,7 +1,7 @@
 // @ts-check
-import chalk from 'chalk';
 import { getDevices } from '../../lib/devices.js';
 import { isJsonMode, printOk, printErr, createSpinner, classifyError } from '../../lib/output.js';
+import { success, hint, label } from '../../lib/format.js';
 import { applyJsonFlag, ensureConfigured, getGlobalUser } from './_shared.js';
 
 export function registerListCommand(device) {
@@ -16,10 +16,10 @@ export function registerListCommand(device) {
             ensureConfigured();
             const user = getGlobalUser(cmd);
             const filter = pattern ? { name: pattern } : {};
-            const label = pattern
+            const spinnerLabel = pattern
                 ? `Searching devices matching "${pattern}"...`
                 : 'Fetching devices...';
-            const spinner = createSpinner(label).start();
+            const spinner = createSpinner(spinnerLabel).start();
             try {
                 const devices = await getDevices(filter, user);
                 spinner.succeed(`Found ${devices.length} device(s)`);
@@ -28,10 +28,10 @@ export function registerListCommand(device) {
                 } else {
                     for (const d of devices) {
                         const online = d.connection?.active
-                            ? chalk.green('online ')
-                            : chalk.gray('offline');
-                        const name = d.name ? chalk.gray(` (${d.name})`) : '';
-                        console.log(`  ${online}  ${chalk.bold(d.device)}${name}`);
+                            ? success('online ')
+                            : hint('offline');
+                        const name = d.name ? hint(` (${d.name})`) : '';
+                        console.log(`  ${online}  ${label(d.device)}${name}`);
                     }
                 }
             } catch (error) {

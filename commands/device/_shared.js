@@ -1,8 +1,8 @@
 // @ts-check
-import chalk from 'chalk';
 import { InvalidArgumentError } from 'commander';
 import { configExists } from '../../lib/config.js';
 import { setJsonMode, classifyError, printErr } from '../../lib/output.js';
+import { error as errorStyle } from '../../lib/format.js';
 
 export function ensureConfigured() {
     if (!configExists()) {
@@ -42,7 +42,7 @@ export const runInteractive = async (fn) => {
         process.exit(exitCode ?? 0);
     } catch (error) {
         const { message, code } = classifyError(error);
-        console.error(chalk.red(`Error [${code}]: ${message}`));
+        console.error(errorStyle(`Error [${code}]: ${message}`));
         process.exit(1);
     }
 };

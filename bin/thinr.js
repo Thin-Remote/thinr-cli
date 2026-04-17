@@ -4,8 +4,8 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { Command } from 'commander';
-import chalk from 'chalk';
 import figlet from 'figlet';
+import { accent, info } from '../lib/format.js';
 import ora from 'ora';
 import { configExists, readConfig, setActiveProfile } from '../lib/config.js';
 import { detectJsonModeFromArgv } from '../lib/output.js';
@@ -42,8 +42,8 @@ import { startMCPServer } from '../lib/mcp/server.js';
 
 // Function to display the banner
 function displayBanner() {
-    console.log(chalk.cyan(figlet.textSync('thinr-cli', { horizontalLayout: 'full' })));
-    console.log(chalk.blue('Thin Remote CLI - Remote management for IoT devices'));
+    console.log(accent(figlet.textSync('thinr-cli', { horizontalLayout: 'full' })));
+    console.log(info('Thin Remote CLI - Remote management for IoT devices'));
     console.log();
 }
 

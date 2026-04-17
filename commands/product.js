@@ -1,4 +1,3 @@
-import chalk from 'chalk';
 import Table from 'cli-table3';
 import { InvalidArgumentError } from 'commander';
 import { configExists } from '../lib/config.js';
@@ -8,7 +7,17 @@ import { filterActiveDevices, getDevices } from '../lib/devices.js';
 import { createDeviceAPI } from '../lib/device-api.js';
 import { runPool } from '../lib/concurrency.js';
 import { getMonitoringData } from '../lib/monitoring.js';
-import { formatUptime, colorPct } from '../lib/format.js';
+import {
+    formatUptime,
+    colorPct,
+    label,
+    muted,
+    hint,
+    success,
+    error as errorStyle,
+    warning,
+    info,
+} from '../lib/format.js';
 import {
     setJsonMode,
     isJsonMode,
@@ -102,9 +111,9 @@ export function productCommand(program) {
                     if (!isJsonMode()) {
                         console.log(
                             'Device',
-                            chalk.blue(device.device),
+                            info(device.device),
                             'property',
-                            chalk.blue(propertyId),
+                            info(propertyId),
                         );
                         if (opts.field) console.log(value);
                         else console.log(formatDeviceProperty(device.device, propertyId, property));
@@ -114,7 +123,7 @@ export function productCommand(program) {
                     results.push({ device: device.device, ok: false, error: { message, code } });
                     if (!isJsonMode()) {
                         console.error(
-                            chalk.red(
+                            errorStyle(
                                 `Error retrieving property ${propertyId} for device ${device.device}: ${message}`,
                             ),
                         );
@@ -159,9 +168,9 @@ export function productCommand(program) {
                     if (!isJsonMode()) {
                         console.log(
                             'Device',
-                            chalk.blue(device.device),
+                            info(device.device),
                             'resource',
-                            chalk.blue(resource),
+                            info(resource),
                         );
                         console.log(value);
                     }
@@ -170,7 +179,7 @@ export function productCommand(program) {
                     results.push({ device: device.device, ok: false, error: { message, code } });
                     if (!isJsonMode()) {
                         console.error(
-                            chalk.red(
+                            errorStyle(
                                 `Error executing resource ${resource} for device ${device.device}: ${message}`,
                             ),
                         );
@@ -229,7 +238,7 @@ export function productCommand(program) {
                         results: [],
                     });
                 } else {
-                    console.log(chalk.yellow('No devices to run on.'));
+                    console.log(warning('No devices to run on.'));
                 }
                 return;
             }
@@ -307,7 +316,7 @@ export function productCommand(program) {
                 if (isJsonMode()) {
                     printErr(message, { code });
                 } else {
-                    console.error(chalk.red(`fail-fast: ${message}`));
+                    console.error(errorStyle(`fail-fast: ${message}`));
                 }
                 return;
             }
@@ -351,10 +360,10 @@ export function productCommand(program) {
             }
 
             const statusBadge = (e) => {
-                if (e.error) return chalk.red('error');
-                if (e.timedOut) return chalk.yellow('timeout');
-                if (e.ok) return chalk.green('ok');
-                return chalk.red('fail');
+                if (e.error) return errorStyle('error');
+                if (e.timedOut) return warning('timeout');
+                if (e.ok) return success('ok');
+                return errorStyle('fail');
             };
             const detail = (e) => {
                 if (e.error) return e.error.message;
@@ -362,7 +371,7 @@ export function productCommand(program) {
                 return `exit=${e.exitCode ?? 'null'}`;
             };
             const table = new Table({
-                head: ['Device', 'Status', 'Detail', 'Duration'].map((h) => chalk.bold(h)),
+                head: ['Device', 'Status', 'Detail', 'Duration'].map((h) => label(h)),
                 style: { head: [], border: ['gray'] },
                 colAligns: ['left', 'left', 'left', 'right'],
             });
@@ -383,7 +392,7 @@ export function productCommand(program) {
                 (e) => (e.stdout && e.stdout.trim()) || (e.stderr && e.stderr.trim()),
             );
             if (withOutput.length) {
-                console.log(chalk.bold('\nOutput:'));
+                console.log(label('\nOutput:'));
                 for (const e of withOutput) {
                     const body = [e.stdout, e.stderr]
                         .map((s) => (s ? s.replace(/\s+$/, '') : ''))
@@ -391,9 +400,9 @@ export function productCommand(program) {
                         .join('\n');
                     const lines = body.split('\n');
                     if (lines.length === 1) {
-                        console.log(`  ${chalk.dim(e.device + ':')}  ${lines[0]}`);
+                        console.log(`  ${muted(e.device + ':')}  ${lines[0]}`);
                     } else {
-                        console.log(`  ${chalk.dim(e.device + ':')}`);
+                        console.log(`  ${muted(e.device + ':')}`);
                         for (const line of lines) console.log(`    ${line}`);
                     }
                 }
@@ -401,7 +410,7 @@ export function productCommand(program) {
 
             console.log(
                 '\n' +
-                    chalk.gray(
+                    hint(
                         `${entries.length} total — ${okCount} ok, ${failCount} fail, ${timedOutCount} timeout, ${errorCount} error · ${totalDurationMs}ms`,
                     ),
             );
@@ -485,14 +494,14 @@ export function productCommand(program) {
                 }
                 const table = new Table({
                     head: ['Device', 'Status', 'CPU', 'Mem', 'Disk', 'Load', 'Uptime'].map((h) =>
-                        chalk.bold(h),
+                        label(h),
                     ),
                     style: { head: [], border: ['gray'] },
                     colAligns: ['left', 'left', 'right', 'right', 'right', 'right', 'right'],
                 });
                 for (const { device, mon } of rows) {
                     const online = !!device.connection?.active;
-                    const status = online ? chalk.green('online') : chalk.dim('offline');
+                    const status = online ? success('online') : muted('offline');
                     if (online && mon) {
                         table.push([
                             device.device,
@@ -502,24 +511,24 @@ export function productCommand(program) {
                             colorPct(mon.disk?.root?.usage),
                             mon.load?.['1m'] != null
                                 ? mon.load['1m'].toFixed(2)
-                                : chalk.dim('—'),
+                                : muted('—'),
                             formatUptime(mon.uptime),
                         ]);
                     } else {
-                        const dim = chalk.dim('—');
+                        const dim = muted('—');
                         table.push([device.device, status, dim, dim, dim, dim, dim]);
                     }
                 }
                 const header = watchSeconds
-                    ? chalk.gray(
+                    ? hint(
                           `${productId} · refreshed ${new Date().toLocaleTimeString()} · every ${watchSeconds}s · Ctrl+C to stop`,
                       )
-                    : chalk.gray(`${productId} · ${new Date().toLocaleTimeString()}`);
+                    : hint(`${productId} · ${new Date().toLocaleTimeString()}`);
                 console.log(header);
                 console.log(table.toString());
                 const onlineCount = rows.filter((r) => r.device.connection?.active).length;
                 console.log(
-                    chalk.gray(`${rows.length} total · ${onlineCount} online · ${rows.length - onlineCount} offline`),
+                    hint(`${rows.length} total · ${onlineCount} online · ${rows.length - onlineCount} offline`),
                 );
             };
 
@@ -584,7 +593,7 @@ export function productCommand(program) {
                     render(rows);
                 } catch (error) {
                     const { message, code } = classifyError(error);
-                    console.error(chalk.red(`[watch] ${code}: ${message}`));
+                    console.error(errorStyle(`[watch] ${code}: ${message}`));
                 }
             }
         });
