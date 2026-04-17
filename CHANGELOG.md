@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- MCP: `thinr_push` and `thinr_pull` — upload a local file to a
+  device and download a remote file to local disk, respectively.
+  Rounds out filesystem parity with the CLI so an agent can move
+  binary or large payloads that don't fit inline in `thinr_write`.
+
 ### Changed
 
 - Unified filesystem verbs across CLI, MCP and playbooks so the same
