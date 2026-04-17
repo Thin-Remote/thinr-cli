@@ -4,3 +4,4 @@ node_modules/
 .koecode/
 .mcp.json
 CLAUDE.md
+dist/

@@ -3,7 +3,7 @@ import globals from 'globals';
 import prettierConfig from 'eslint-config-prettier';
 
 export default [
-    { ignores: ['node_modules/**', 'package-lock.json'] },
+    { ignores: ['node_modules/**', 'package-lock.json', 'src/**', 'dist/**'] },
     js.configs.recommended,
     {
         languageOptions: {
