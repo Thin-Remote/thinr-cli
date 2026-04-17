@@ -535,6 +535,24 @@ export function productCommand(program) {
             const exitAltScreen = () => process.stdout.write('\x1b[?1049l');
             const clearScreen = () => process.stdout.write('\x1b[H\x1b[2J');
 
+            // First pass — always. The spinner runs in the main buffer so
+            // the user sees progress while we fetch devices + monitoring
+            // in parallel; once data is ready, we (optionally) switch to
+            // the alternate screen and draw the table from there.
+            let rows;
+            const spinner = createSpinner(
+                `Fetching status for devices in product ${productId}...`,
+            ).start();
+            try {
+                rows = await collect();
+                spinner.stop();
+            } catch (error) {
+                spinner.fail(`Failed to fetch status for product ${productId}`);
+                const { message, code } = classifyError(error);
+                printErr(message, { code });
+                return;
+            }
+
             if (useAltScreen) {
                 enterAltScreen();
                 // Restore the main screen on any path out, including
@@ -543,16 +561,7 @@ export function productCommand(program) {
                 process.once('exit', exitAltScreen);
             }
 
-            // First pass — always.
-            try {
-                const rows = await collect();
-                render(rows);
-            } catch (error) {
-                if (useAltScreen) exitAltScreen();
-                const { message, code } = classifyError(error);
-                printErr(message, { code });
-                return;
-            }
+            render(rows);
 
             if (!watchSeconds) return;
 
