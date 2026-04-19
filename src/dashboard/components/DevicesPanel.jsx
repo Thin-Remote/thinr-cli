@@ -1,44 +1,107 @@
 import React, { useEffect, useMemo } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import { theme } from '../theme.js';
+import { Panel } from './Panel.jsx';
+import { deviceHealth } from '../lib/status.js';
 
-function formatRelative(ts) {
-    if (!ts) return '—';
-    const secs = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
-    if (secs < 60) return `${secs}s ago`;
-    if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
-    if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
-    return `${Math.floor(secs / 86400)}d ago`;
+const SORT_OPTIONS = ['status', 'name', 'cpu', 'mem', 'disk', 'up'];
+
+function dotFor(health) {
+    if (health === 'on') return { glyph: '●', color: theme.lime };
+    if (health === 'warn') return { glyph: '▲', color: theme.amber };
+    if (health === 'bad') return { glyph: '✕', color: theme.red };
+    return { glyph: '○', color: theme.fgFaint };
+}
+
+function uptimeSeconds(sample) {
+    if (!sample?.uptime) return 0;
+    return Number(sample.uptime) || 0;
+}
+
+function fmtNum(value, color) {
+    if (value == null) return <Text color={theme.fgFaint}>—</Text>;
+    return <Text color={color}>{Math.round(value)}</Text>;
+}
+
+function colorPct(p, warn = 75, bad = 90) {
+    if (p == null) return theme.fgFaint;
+    if (p >= bad) return theme.red;
+    if (p >= warn) return theme.amber;
+    return theme.fg;
+}
+
+function fmtUp(seconds) {
+    if (!seconds) return '—';
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    if (d > 0) return `${d}d${h}h`;
+    const m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return `${h}h${m}m`;
+    return `${m}m`;
+}
+
+function HeaderCell({ label, sortKey, currentSort, width, align = 'left' }) {
+    const active = currentSort === sortKey;
+    const color = active ? theme.accent : theme.fgFaint;
+    return (
+        <Box width={width} justifyContent={align === 'right' ? 'flex-end' : 'flex-start'}>
+            <Text color={color}>{label}</Text>
+        </Box>
+    );
 }
 
 export function DevicesPanel({
     devices,
+    samples,
     loading,
     error,
     focused,
     selectedId,
     onSelect,
+    sort = 'status',
     filter = '',
     filtering = false,
 }) {
-    const sorted = useMemo(() => {
-        const base = [...devices].sort((a, b) => {
-            const ao = a.connection?.active ? 0 : 1;
-            const bo = b.connection?.active ? 0 : 1;
-            if (ao !== bo) return ao - bo;
-            return a.device.localeCompare(b.device);
+    const enriched = useMemo(() => {
+        return devices.map((d) => {
+            const sample = samples?.[d.device];
+            return {
+                d,
+                sample,
+                health: deviceHealth(d, sample),
+                cpu: sample?.cpu?.usage ?? null,
+                mem: sample?.memory?.usage ?? null,
+                disk: sample?.disk?.root?.usage ?? null,
+                up: uptimeSeconds(sample),
+            };
         });
-        if (!filter) return base;
+    }, [devices, samples]);
+
+    const sorted = useMemo(() => {
+        const order = { bad: 0, warn: 1, on: 2, off: 3 };
+        const copy = [...enriched];
+        copy.sort((a, b) => {
+            if (sort === 'name') return a.d.device.localeCompare(b.d.device);
+            if (sort === 'cpu') return (b.cpu ?? -1) - (a.cpu ?? -1);
+            if (sort === 'mem') return (b.mem ?? -1) - (a.mem ?? -1);
+            if (sort === 'disk') return (b.disk ?? -1) - (a.disk ?? -1);
+            if (sort === 'up') return b.up - a.up;
+            // status (default): worst first, then name
+            const oo = order[a.health] - order[b.health];
+            if (oo !== 0) return oo;
+            return a.d.device.localeCompare(b.d.device);
+        });
+        if (!filter) return copy;
         const needle = filter.toLowerCase();
-        return base.filter(
-            (d) =>
-                d.device.toLowerCase().includes(needle) ||
-                (d.name && d.name.toLowerCase().includes(needle)),
+        return copy.filter(
+            (e) =>
+                e.d.device.toLowerCase().includes(needle) ||
+                (e.d.name && e.d.name.toLowerCase().includes(needle)),
         );
-    }, [devices, filter]);
+    }, [enriched, sort, filter]);
 
     const selectedIndex = useMemo(() => {
-        const idx = sorted.findIndex((d) => d.device === selectedId);
+        const idx = sorted.findIndex((e) => e.d.device === selectedId);
         return idx >= 0 ? idx : 0;
     }, [sorted, selectedId]);
 
@@ -46,7 +109,7 @@ export function DevicesPanel({
         if (sorted.length === 0) return;
         const current = sorted[selectedIndex];
         if (!current) return;
-        if (current.device !== selectedId) onSelect(current.device);
+        if (current.d.device !== selectedId) onSelect(current.d.device);
     }, [sorted, selectedIndex, selectedId, onSelect]);
 
     useInput(
@@ -61,24 +124,21 @@ export function DevicesPanel({
             else if (input === 'g') next = 0;
             else if (input === 'G') next = sorted.length - 1;
             else return;
-            onSelect(sorted[next].device);
+            onSelect(sorted[next].d.device);
         },
         { isActive: focused },
     );
 
-    const idWidth = sorted.reduce((w, d) => Math.max(w, d.device.length), 0);
-    const borderColor = focused ? theme.borderFocus : theme.border;
-
+    const idWidth = sorted.reduce((w, e) => Math.max(w, e.d.device.length), 8);
     const { stdout } = useStdout();
     // Header (~3) + footer (~3) + panel border (2) + title row + margin (1) +
-    // possible overflow indicators (2): the list itself gets the rest.
-    const visibleCount = Math.max(3, (stdout?.rows ?? 40) - 11);
+    // possible overflow indicators (2) + column header (1): the list itself
+    // gets the rest.
+    const visibleCount = Math.max(3, (stdout?.rows ?? 40) - 12);
 
     let start = 0;
     let end = sorted.length;
     if (sorted.length > visibleCount) {
-        // Keep the selection centered when we can; clamp to the edges at the
-        // top and bottom of the list so we use the full viewport.
         const half = Math.floor(visibleCount / 2);
         start = Math.max(0, Math.min(selectedIndex - half, sorted.length - visibleCount));
         end = start + visibleCount;
@@ -88,76 +148,79 @@ export function DevicesPanel({
     const hiddenBelow = sorted.length - end;
 
     return (
-        <Box
-            flexDirection="column"
-            borderStyle="round"
-            borderColor={borderColor}
-            paddingX={1}
-            flexGrow={1}
-        >
-            <Box marginBottom={1} justifyContent="space-between">
-                <Box>
-                    <Text color={theme.muted}>DEVICES</Text>
-                    <Text color={theme.dim}>
-                        {' '}
-                        · {sorted.length}
-                        {filter ? ` / ${devices.length}` : ''}
-                    </Text>
-                </Box>
-                {(filtering || filter) && (
+        <Panel
+            title="DEVICES"
+            sub={`${sorted.length}${filter ? ` / ${devices.length}` : ''}`}
+            focused={focused}
+            right={
+                filtering || filter ? (
                     <Box>
-                        <Text color={filtering ? theme.accent : theme.muted}>/</Text>
+                        <Text color={filtering ? theme.accent : theme.fgDim}>/</Text>
                         <Text color={theme.fg}>{filter}</Text>
                         {filtering && <Text color={theme.accent}>▌</Text>}
                     </Box>
-                )}
+                ) : (
+                    <Text>
+                        <Text color={theme.fgFaint}>sort </Text>
+                        <Text color={theme.accent}>{sort}</Text>
+                    </Text>
+                )
+            }
+        >
+            <Box>
+                <Box width={2} />
+                <HeaderCell label="name" sortKey="name" currentSort={sort} width={idWidth + 2} />
+                <HeaderCell label="cpu" sortKey="cpu" currentSort={sort} width={5} align="right" />
+                <HeaderCell label="mem" sortKey="mem" currentSort={sort} width={5} align="right" />
+                <HeaderCell label="disk" sortKey="disk" currentSort={sort} width={5} align="right" />
+                <HeaderCell label="up" sortKey="up" currentSort={sort} width={6} align="right" />
             </Box>
 
-            {loading && sorted.length === 0 && <Text color={theme.muted}>loading…</Text>}
-            {error && <Text color={theme.err}>{error}</Text>}
-
-            {hiddenAbove > 0 && (
-                <Text color={theme.dim}>↑ {hiddenAbove} more</Text>
+            {loading && sorted.length === 0 && (
+                <Text color={theme.fgDim}>loading…</Text>
             )}
+            {error && <Text color={theme.red}>{error}</Text>}
+
+            {hiddenAbove > 0 && <Text color={theme.fgFaint}>↑ {hiddenAbove} more</Text>}
 
             <Box flexDirection="column">
-                {slice.map((d) => {
-                    const online = d.connection?.active;
-                    const isSel = d.device === selectedId;
-                    const rowBg = isSel ? theme.dim : undefined;
-                    const dot = online ? (
-                        <Text color={theme.ok}>●</Text>
-                    ) : (
-                        <Text color={theme.err}>○</Text>
-                    );
-                    const id = d.device.padEnd(idWidth);
-                    const name = d.name ? ` ${d.name}` : '';
-                    const seen = online
-                        ? ''
-                        : `  ${formatRelative(d.connection?.disconnected_ts || d.last_connection_ts)}`;
+                {slice.map((e) => {
+                    const isSel = e.d.device === selectedId;
+                    const dot = dotFor(e.health);
+                    const id = e.d.device.padEnd(idWidth);
                     return (
-                        <Box key={d.device} backgroundColor={rowBg}>
-                            <Text wrap="truncate-end">
-                                {isSel ? (
-                                    <Text color={theme.accent}>›</Text>
-                                ) : (
-                                    <Text> </Text>
-                                )}{' '}
-                                {dot}{' '}
-                                <Text color={isSel ? theme.fg : theme.muted}>{id}</Text>
-                                <Text color={theme.dim}>
-                                    {name}
-                                    {seen}
+                        <Box key={e.d.device} backgroundColor={isSel ? '#1a2030' : undefined}>
+                            <Box width={2}>
+                                <Text color={isSel ? theme.accent : undefined}>
+                                    {isSel ? '›' : ' '}
                                 </Text>
-                            </Text>
+                            </Box>
+                            <Box width={idWidth + 2}>
+                                <Text wrap="truncate-end">
+                                    <Text color={dot.color}>{dot.glyph}</Text>{' '}
+                                    <Text color={isSel ? theme.fg : theme.fgDim}>{id}</Text>
+                                </Text>
+                            </Box>
+                            <Box width={5} justifyContent="flex-end">
+                                {fmtNum(e.cpu, colorPct(e.cpu))}
+                            </Box>
+                            <Box width={5} justifyContent="flex-end">
+                                {fmtNum(e.mem, colorPct(e.mem))}
+                            </Box>
+                            <Box width={5} justifyContent="flex-end">
+                                {fmtNum(e.disk, colorPct(e.disk, 85, 95))}
+                            </Box>
+                            <Box width={6} justifyContent="flex-end">
+                                <Text color={theme.fgDim}>{fmtUp(e.up)}</Text>
+                            </Box>
                         </Box>
                     );
                 })}
             </Box>
 
-            {hiddenBelow > 0 && (
-                <Text color={theme.dim}>↓ {hiddenBelow} more</Text>
-            )}
-        </Box>
+            {hiddenBelow > 0 && <Text color={theme.fgFaint}>↓ {hiddenBelow} more</Text>}
+        </Panel>
     );
 }
+
+export { SORT_OPTIONS };
