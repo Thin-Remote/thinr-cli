@@ -1,11 +1,14 @@
 import chalk from 'chalk';
+import { input } from '@inquirer/prompts';
 import {
     listProfiles,
     getActiveProfile,
     getProfile,
+    setActiveProfile,
     setDefaultProfile,
     deleteProfile,
 } from '../lib/config.js';
+import { authenticate } from '../lib/auth.js';
 import { setJsonMode, isJsonMode, printOk, printErr } from '../lib/output.js';
 
 function applyJsonFlag(opts) {
@@ -83,6 +86,63 @@ export function profileCommand(program) {
                 return;
             }
             console.log(chalk.green(`Default profile set to ${name}`));
+        });
+
+    profile
+        .command('add [name]')
+        .description('Add a new profile via interactive authentication')
+        .option('--no-activate', 'Do not set the new profile as default')
+        .option('-j, --json', 'Output as JSON')
+        .action(async (nameArg, opts) => {
+            applyJsonFlag(opts);
+            let name = nameArg;
+            if (!name) {
+                try {
+                    name = await input({
+                        message: 'Profile name:',
+                        validate: (v) => {
+                            const trimmed = (v || '').trim();
+                            if (!trimmed) return 'Profile name is required';
+                            if (/\s/.test(trimmed)) return 'Profile name cannot contain whitespace';
+                            return true;
+                        },
+                    });
+                } catch (error) {
+                    printErr(error.message || 'Prompt cancelled');
+                    return;
+                }
+            }
+            name = name.trim();
+            if (getProfile(name)) {
+                printErr(`Profile already exists: ${name}`, { code: 'already_exists' });
+                return;
+            }
+            setActiveProfile(name);
+            try {
+                await authenticate();
+                const saved = getProfile(name);
+                if (!saved || !saved.token || !saved.username) {
+                    throw new Error('Authentication did not complete; profile discarded.');
+                }
+            } catch (error) {
+                setActiveProfile(null);
+                try {
+                    deleteProfile(name);
+                } catch {
+                    // Best-effort cleanup — ignore secondary failures
+                }
+                printErr(error.message || 'Authentication failed');
+                return;
+            }
+            const activate = opts.activate !== false;
+            if (activate) setDefaultProfile(name);
+            setActiveProfile(null);
+            if (isJsonMode()) {
+                printOk({ added: name, activated: activate, active: getActiveProfile() });
+                return;
+            }
+            const suffix = activate ? ' and set as default' : '';
+            console.log(chalk.green(`Profile ${name} added${suffix}`));
         });
 
     profile
