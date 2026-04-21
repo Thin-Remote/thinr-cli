@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import WebSocket from 'ws';
 import { readConfig } from '../../../lib/config.js';
 import { getMonitoringData } from '../../../lib/monitoring.js';
-import { runPool } from '../../../lib/concurrency.js';
 
 // Fleet-wide monitoring + connection events driven by the user-level
 // /v2/.../events websocket. A single persistent socket carries two
@@ -20,7 +19,11 @@ import { runPool } from '../../../lib/concurrency.js';
 
 const HISTORY = 40;
 const BUCKET = 'monitoring';
-const CONCURRENCY = 8;
+const BASELINE_ITEMS = 500; // cap on devices returned in the one-shot snapshot.
+// Fields pulled on baseline. The server drops rows where any of these is
+// null, so keep to universal agent metrics — anything richer (temperature,
+// network rates, etc.) comes via the WS stream.
+const BASELINE_FIELDS = 'cpu.usage,memory.usage,disk.root.usage,uptime,agent.version';
 const FLUSH_MS = 400; // coalesce bursts of writes before re-rendering.
 const MAX_BACKOFF_MS = 30_000;
 const MAX_EVENTS = 80;
@@ -42,11 +45,13 @@ function mapState(state) {
 export function useFleetMonitoringStream(devices) {
     const [samples, setSamples] = useState({});
     const [history, setHistory] = useState({ cpu: [], mem: [], disk: [] });
+    const [cpuHistory, setCpuHistory] = useState({});
     const [events, setEvents] = useState([]);
     const [status, setStatus] = useState('idle');
 
     const samplesRef = useRef({});
     const historyRef = useRef({ cpu: [], mem: [], disk: [] });
+    const cpuHistoryRef = useRef({});
     const pendingRef = useRef({});
     const flushTimerRef = useRef(null);
     const wsRef = useRef(null);
@@ -62,33 +67,33 @@ export function useFleetMonitoringStream(devices) {
         .join(',');
 
     // REST baseline — one sample per online device on first appearance.
+    // Single multi-device call: with no `device` the helper defaults to
+    // group_by=device and the server returns the latest sample per device.
     useEffect(() => {
         const ids = onlineKey ? onlineKey.split(',') : [];
         const missing = ids.filter((id) => !samplesRef.current[id]);
         if (missing.length === 0) return;
         let cancelled = false;
         (async () => {
-            const results = await runPool(missing, CONCURRENCY, async (id) => {
-                try {
-                    const data = await getMonitoringData({
-                        device: id,
-                        items: 1,
-                        sort: 'desc',
-                    });
-                    return Array.isArray(data) && data.length ? data[0] : null;
-                } catch {
-                    return null;
+            try {
+                const data = await getMonitoringData({
+                    items: BASELINE_ITEMS,
+                    sort: 'desc',
+                    fields: BASELINE_FIELDS,
+                });
+                if (cancelled || !Array.isArray(data)) return;
+                const missingSet = new Set(missing);
+                const updates = {};
+                for (const sample of data) {
+                    const id = sample?.device;
+                    if (!id || !missingSet.has(id)) continue;
+                    updates[id] = sample;
                 }
-            });
-            if (cancelled) return;
-            const updates = {};
-            missing.forEach((id, i) => {
-                const r = results[i];
-                const s = r && r.ok ? r.value : null;
-                if (s) updates[id] = s;
-            });
-            if (Object.keys(updates).length === 0) return;
-            applyUpdates(updates);
+                if (Object.keys(updates).length === 0) return;
+                applyUpdates(updates);
+            } catch {
+                // Baseline is best-effort; the WS stream will fill samples in.
+            }
         })();
         return () => {
             cancelled = true;
@@ -217,7 +222,25 @@ export function useFleetMonitoringStream(devices) {
         const next = { ...samplesRef.current, ...updates };
         samplesRef.current = next;
         setSamples(next);
+        pushDeviceCpu(updates);
         pushHistory();
+    }
+
+    function pushDeviceCpu(updates) {
+        const next = { ...cpuHistoryRef.current };
+        let changed = false;
+        for (const [id, s] of Object.entries(updates)) {
+            const v = s?.cpu?.usage;
+            if (v == null || !Number.isFinite(Number(v))) continue;
+            const arr = next[id] ? next[id].slice() : [];
+            arr.push(Number(v));
+            if (arr.length > HISTORY) arr.splice(0, arr.length - HISTORY);
+            next[id] = arr;
+            changed = true;
+        }
+        if (!changed) return;
+        cpuHistoryRef.current = next;
+        setCpuHistory(next);
     }
 
     function pushHistory() {
@@ -254,5 +277,5 @@ export function useFleetMonitoringStream(devices) {
         setHistory(next);
     }
 
-    return { samples, history, events, status };
+    return { samples, history, cpuHistory, events, status };
 }
