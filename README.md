@@ -396,7 +396,7 @@ target any device/account/environment without restart.
 | Resources             | `thinr_resource_list` (with `in`/`out` schemas), `thinr_resource_call`                                                |
 | Properties            | `thinr_property_get`, `thinr_property_set`                                                                            |
 | Scripts (device)      | `thinr_script_list`, `thinr_script_write`, `thinr_script_delete`                                                      |
-| Monitoring and update | `thinr_monitoring`, `thinr_update`                                                                                    |
+| Monitoring and update | `thinr_monitoring`, `thinr_bucket_read`, `thinr_update`                                                               |
 | Products              | `thinr_products`, `thinr_product_delete`, `thinr_device_set_product`                                                  |
 | Product scripts       | `thinr_product_script_list`, `thinr_product_script_read`, `thinr_product_script_write`, `thinr_product_script_delete` |
 
