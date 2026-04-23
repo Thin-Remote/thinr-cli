@@ -30,9 +30,13 @@ function colorPct(p, warn = 75, bad = 90) {
     return theme.fg;
 }
 
+// Keep the uptime column to at most 5 characters so it fits the header
+// width without wrapping even on long-lived servers (800+ days). At
+// multi-day scale hours stop being informative, so we drop them.
 function fmtUp(seconds) {
     if (!seconds) return '—';
     const d = Math.floor(seconds / 86400);
+    if (d >= 10) return `${d}d`;
     const h = Math.floor((seconds % 86400) / 3600);
     if (d > 0) return `${d}d${h}h`;
     const m = Math.floor((seconds % 3600) / 60);
@@ -210,8 +214,10 @@ export function DevicesPanel({
                             <Box width={5} justifyContent="flex-end">
                                 {fmtNum(e.disk, colorPct(e.disk, 85, 95))}
                             </Box>
-                            <Box width={6} justifyContent="flex-end">
-                                <Text color={theme.fgDim}>{fmtUp(e.up)}</Text>
+                            <Box width={6} justifyContent="flex-end" flexShrink={0}>
+                                <Text color={theme.fgDim} wrap="truncate">
+                                    {fmtUp(e.up)}
+                                </Text>
                             </Box>
                         </Box>
                     );

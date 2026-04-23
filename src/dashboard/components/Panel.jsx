@@ -16,6 +16,10 @@ export function Panel({
     paddingY = 0,
     flexShrink,
     minHeight,
+    // Default to hiding overflow: content that doesn't fit inside the panel
+    // body gets clipped rather than spilling past the border (where it would
+    // overwrite whatever is below or wrap into the next panel's chrome).
+    overflow = 'hidden',
 }) {
     const borderColor = focused ? theme.borderFocus : theme.border;
     const titleColor = focused ? theme.accent : theme.fg;
@@ -49,7 +53,7 @@ export function Panel({
                     {right && <Box>{right}</Box>}
                 </Box>
             )}
-            <Box flexDirection="column" flexGrow={1}>
+            <Box flexDirection="column" flexGrow={1} overflow={overflow}>
                 {children}
             </Box>
         </Box>
