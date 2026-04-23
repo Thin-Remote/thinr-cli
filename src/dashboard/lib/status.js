@@ -65,16 +65,17 @@ export function activeAlerts(devices, samples) {
     return alerts;
 }
 
-// Normalize the agent version string to its release tag, dropping the git
-// describe suffix (e.g. `v1.5.0-2-g7c3d192` -> `v1.5.0`). Keeps the bar chart
-// readable and groups dev builds with their parent release.
-export function normalizeAgentVersion(raw) {
-    if (!raw) return null;
-    // Strip `-N-g<sha>` describe suffix.
-    const m = raw.match(/^(v?\d+\.\d+\.\d+)/);
-    return m ? m[1] : raw;
-}
+// Version helpers live in `lib/agent-versions.js` so the CLI can reuse
+// them without pulling dashboard-specific code. Re-exported from here for
+// call-sites that already import `normalizeAgentVersion` / `compareAgentVersions`
+// from the dashboard module.
+import { normalizeAgentVersion, compareAgentVersions } from '../../../lib/agent-versions.js';
+export { normalizeAgentVersion, compareAgentVersions };
 
+// Returns [version, count] tuples sorted newest-first by semver. Callers that
+// need popularity order can re-sort. Sorting by semver is what lets the UI
+// label a row as "outdated" without relying on a popularity heuristic (which
+// misfires the moment a newer release rolls out to <50% of the fleet).
 export function agentVersionCounts(devices, samples) {
     const m = new Map();
     for (const d of devices) {
@@ -83,7 +84,22 @@ export function agentVersionCounts(devices, samples) {
         if (!v) continue;
         m.set(v, (m.get(v) || 0) + 1);
     }
-    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+    return [...m.entries()].sort((a, b) => compareAgentVersions(a[0], b[0]));
+}
+
+// Devices whose reported agent version is older than `target`. Devices without
+// a known version (never reported a sample, or reported a string that doesn't
+// parse) are skipped — we don't want to "upgrade" something we can't identify.
+export function outdatedDevices(devices, samples, target) {
+    if (!target) return [];
+    const out = [];
+    for (const d of devices) {
+        const s = samples?.[d.device];
+        const v = normalizeAgentVersion(s?.agent?.version);
+        if (!v) continue;
+        if (compareAgentVersions(v, target) > 0) out.push(d);
+    }
+    return out;
 }
 
 export function deviceKindCounts(devices) {

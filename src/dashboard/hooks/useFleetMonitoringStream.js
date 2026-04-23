@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import WebSocket from 'ws';
 import { readConfig } from '../../../lib/config.js';
 import { getMonitoringData } from '../../../lib/monitoring.js';
@@ -277,5 +277,19 @@ export function useFleetMonitoringStream(devices) {
         setHistory(next);
     }
 
-    return { samples, history, cpuHistory, events, status };
+    // Push a synthetic event into the same stream the WS uses. The EVENTS
+    // panel doesn't care where a row came from — this lets the upgrade
+    // controller surface progress and failures next to connect/disconnect
+    // events without keeping a separate panel.
+    const pushEvent = useCallback((ev) => {
+        const frame = {
+            t: tsStr(ev.ts || Date.now()),
+            kind: ev.kind || 'info',
+            dev: ev.dev || '',
+            msg: ev.msg || '',
+        };
+        setEvents((cur) => [frame, ...cur].slice(0, MAX_EVENTS));
+    }, []);
+
+    return { samples, history, cpuHistory, events, status, pushEvent };
 }

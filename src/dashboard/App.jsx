@@ -10,7 +10,16 @@ import { AlertsTab } from './components/AlertsTab.jsx';
 import { EventsTab } from './components/EventsTab.jsx';
 import { useDevices } from './hooks/useDevices.js';
 import { useFleetMonitoringStream } from './hooks/useFleetMonitoringStream.js';
-import { fleetCounts } from './lib/status.js';
+import { useProductMetrics } from './hooks/useProductMetrics.js';
+import { useLatestAgentVersion } from './hooks/useLatestAgentVersion.js';
+import { useUpgradeController } from './hooks/useUpgradeController.js';
+import { UpgradeModal } from './components/UpgradeModal.jsx';
+import { fleetCounts, outdatedDevices } from './lib/status.js';
+
+// Product whose `dashboard_metrics` property drives the custom panel.
+// Today there's a single ThinRemote product; once we support multiple,
+// this needs to come from the device list (group/first/config).
+const DASHBOARD_PRODUCT = 'thinremote';
 
 const PANELS = ['devices', 'detail'];
 const MIN_COLS = 90;
@@ -19,6 +28,7 @@ const MIN_ROWS = 18;
 const TAB_HINTS = {
     overview: [
         { k: '1-4', label: 'tabs' },
+        { k: 'u', label: 'upgrade' },
         { k: 'q', label: 'quit' },
     ],
     devices: [
@@ -44,7 +54,7 @@ const TAB_HINTS = {
 export function App({ server, onAction }) {
     const { exit } = useApp();
     const { stdout } = useStdout();
-    const [tab, setTab] = useState('devices');
+    const [tab, setTab] = useState('overview');
     const [focus, setFocus] = useState('devices');
     const [selectedId, setSelectedId] = useState(null);
     const [sort, setSort] = useState('status');
@@ -72,12 +82,24 @@ export function App({ server, onAction }) {
     }, [stdout]);
 
     const { devices, loading, error } = useDevices();
-    const { samples, history, events } = useFleetMonitoringStream(devices);
+    const { samples, history, cpuHistory, events, pushEvent } = useFleetMonitoringStream(devices);
+    const productMetrics = useProductMetrics(DASHBOARD_PRODUCT, devices);
+    const { latest: latestAgentVersion } = useLatestAgentVersion();
+    const upgrade = useUpgradeController({ onEvent: pushEvent });
     const counts = useMemo(() => fleetCounts(devices, samples), [devices, samples]);
+    const outdated = useMemo(
+        () =>
+            latestAgentVersion ? outdatedDevices(devices, samples, latestAgentVersion) : [],
+        [devices, samples, latestAgentVersion],
+    );
     const selected = devices.find((d) => d.device === selectedId);
     const selectedOnline = !!selected?.connection?.active;
 
     useInput((input, key) => {
+        // Modal owns input while confirming an upgrade — its own useInput
+        // will handle enter/esc/toggles. Duplicating key handling here would
+        // have the tab keys still flipping the view behind the modal.
+        if (upgrade.state.phase === 'confirming') return;
         if (filtering) {
             if (key.escape) {
                 setFilter('');
@@ -105,6 +127,16 @@ export function App({ server, onAction }) {
             return;
         }
         if (input === 'q' || (key.ctrl && input === 'c')) exit();
+        // 'u' triggers the fleet upgrade modal from the overview tab. Gated
+        // on having a known `latestAgentVersion` and at least one outdated
+        // device — otherwise there's nothing to do and opening an empty
+        // modal is just noise.
+        if (tab === 'overview' && input === 'u') {
+            if (latestAgentVersion && outdated.length > 0 && upgrade.state.phase === 'idle') {
+                upgrade.openConfirm(latestAgentVersion, outdated);
+            }
+            return;
+        }
         if (tab !== 'devices') return;
         if (input === '/') {
             setFocus('devices');
@@ -201,8 +233,30 @@ export function App({ server, onAction }) {
                     devices={devices}
                     samples={samples}
                     history={history}
+                    cpuHistory={cpuHistory}
                     events={events}
+                    productMetrics={productMetrics}
+                    latestAgentVersion={latestAgentVersion}
+                    outdatedCount={outdated.length}
+                    upgradeState={upgrade.state}
                 />
+            )}
+
+            {upgrade.state.phase === 'confirming' && (
+                <Box
+                    position="absolute"
+                    width={size.cols}
+                    height={size.rows}
+                    alignItems="center"
+                    justifyContent="center"
+                >
+                    <UpgradeModal
+                        outdatedCount={upgrade.state.outdatedCount}
+                        target={upgrade.state.target}
+                        onConfirm={(opts) => upgrade.start(opts)}
+                        onCancel={() => upgrade.cancelConfirm()}
+                    />
+                </Box>
             )}
 
             {tab === 'alerts' && <AlertsTab devices={devices} samples={samples} />}

@@ -27,4 +27,10 @@ export const theme = {
     ok: '#2fd67a',
     warn: '#ffb020',
     err: '#ff4d6d',
+
+    // Modal / overlay fill. Slightly lighter than the terminal default so
+    // floating panels stand out against a dark background, but dark enough
+    // that the palette (accent/lime/amber) keeps the same contrast it has
+    // on bare terminal. Text inside inherits via Ink's BackgroundContext.
+    overlayBg: '#141826',
 };

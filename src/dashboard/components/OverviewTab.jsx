@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Box, Text, useStdout } from 'ink';
+import { Box, Text } from 'ink';
 import { theme } from '../theme.js';
 import { Panel } from './Panel.jsx';
 import { Sparkline } from './Sparkline.jsx';
@@ -9,6 +9,7 @@ import {
     fleetCounts,
     activeAlerts,
     agentVersionCounts,
+    compareAgentVersions,
     deviceKindCounts,
 } from '../lib/status.js';
 
@@ -51,25 +52,14 @@ function statusDot(h) {
     return { glyph: '○', color: theme.fgFaint };
 }
 
-function MiniBar({ value, width = 10 }) {
-    const pct = value == null ? 0 : Math.max(0, Math.min(100, value));
-    const filled = Math.round((pct / 100) * width);
-    const color = value == null ? theme.fgFaint : colorForPct(value);
-    return (
-        <Text>
-            <Text color={color}>{'█'.repeat(filled)}</Text>
-            <Text color={theme.borderDim}>{'░'.repeat(width - filled)}</Text>
-        </Text>
-    );
-}
-
-function FleetListRow({ device, sample, health }) {
+function FleetListRow({ device, sample, health, cpuSeries }) {
     const dot = statusDot(health);
     const cpu = sample?.cpu?.usage;
     const mem = sample?.memory?.usage;
-    const hasSample = sample != null;
     const cpuStr = cpu == null ? '  —' : `${Math.round(cpu).toString().padStart(3)}%`;
     const memStr = mem == null ? '  —' : `${Math.round(mem).toString().padStart(3)}%`;
+    const sparkColor = cpu == null ? theme.fgDim : colorForPct(cpu);
+    const hasSpark = Array.isArray(cpuSeries) && cpuSeries.length >= 2;
     return (
         <Box>
             <Box width={2}>
@@ -81,8 +71,8 @@ function FleetListRow({ device, sample, health }) {
                 </Text>
             </Box>
             <Box width={12} marginRight={1}>
-                {hasSample ? (
-                    <MiniBar value={cpu} width={10} />
+                {hasSpark ? (
+                    <Sparkline series={cpuSeries} width={10} color={sparkColor} />
                 ) : (
                     <Text color={theme.fgFaint}>{'·'.repeat(10)}</Text>
                 )}
@@ -106,7 +96,12 @@ function FleetListRow({ device, sample, health }) {
 function VersionBar({ v, count, max, level }) {
     const width = 16;
     const filled = Math.max(1, Math.round((count / max) * width));
-    const color = level === 'new' ? theme.lime : level === 'old' ? theme.amber : theme.red;
+    // level maps semantic rows to palette slots:
+    //   target  → current/desired version (lime)
+    //   old     → behind by one minor/patch (amber)
+    //   ancient → more than one release behind (red)
+    const color =
+        level === 'target' ? theme.lime : level === 'old' ? theme.amber : theme.red;
     return (
         <Box>
             <Box width={9}>
@@ -140,14 +135,21 @@ function AlertRow({ a }) {
 }
 
 function EventRow({ e, isFirst }) {
+    // `upd` (update applied) is kept visually distinct from `join`
+    // (connected). Both are "good" outcomes but they mean different things —
+    // the rollout aftermath typically produces one of each per device (agent
+    // swaps binary → LEAVE → JOIN on reconnect, with my synthetic UPD
+    // threaded in between), so separate colors keep the log scannable.
     const tagColor =
-        e.kind === 'join'
-            ? theme.lime
-            : e.kind === 'leave'
-              ? theme.amber
-              : e.kind === 'err'
-                ? theme.red
-                : theme.accent;
+        e.kind === 'upd'
+            ? theme.accent
+            : e.kind === 'join'
+              ? theme.lime
+              : e.kind === 'leave'
+                ? theme.amber
+                : e.kind === 'err'
+                  ? theme.red
+                  : theme.accent;
     return (
         <Box>
             <Box width={9}>
@@ -166,20 +168,68 @@ function EventRow({ e, isFirst }) {
     );
 }
 
-export function OverviewTab({ devices, samples, history, events }) {
+function formatMetricValue(v, unit) {
+    if (v == null) return '—';
+    if (Array.isArray(v)) return String(v.length);
+    if (!Number.isFinite(Number(v))) return String(v);
+    const n = Number(v);
+    const rounded = Math.abs(n) >= 100 ? Math.round(n) : Math.round(n * 10) / 10;
+    const formatted = rounded.toLocaleString('en-US');
+    return unit ? `${formatted} ${unit}` : formatted;
+}
+
+function MetricRow({ metric, value, history, lastUpdate }) {
+    const ageS = lastUpdate ? Math.round((Date.now() - lastUpdate) / 1000) : null;
+    const showSparkline = metric.visualization === 'sparkline';
+    // Auto-scale against the visible window so values of any magnitude
+    // (percentages, counts in the thousands) render with full dynamic range.
+    const sparkMax = showSparkline
+        ? Math.max(1, ...(history || []).filter((v) => Number.isFinite(v)))
+        : undefined;
+    return (
+        <Box>
+            <Box flexGrow={1} flexBasis={0} minWidth={0}>
+                <Text color={theme.fgDim} wrap="truncate-end">
+                    {metric.label || metric.name}
+                </Text>
+            </Box>
+            {showSparkline && (
+                <Box marginRight={1}>
+                    <Sparkline
+                        series={history}
+                        width={14}
+                        color={theme.accent}
+                        max={sparkMax}
+                    />
+                </Box>
+            )}
+            <Box width={14} justifyContent="flex-end" marginRight={1}>
+                <Text color={theme.accent} bold>
+                    {formatMetricValue(value, metric.unit)}
+                </Text>
+            </Box>
+            <Box width={6} justifyContent="flex-end">
+                <Text color={theme.fgFaint}>{ageS == null ? '—' : `${ageS}s`}</Text>
+            </Box>
+        </Box>
+    );
+}
+
+export function OverviewTab({
+    devices,
+    samples,
+    history,
+    cpuHistory,
+    events,
+    productMetrics,
+    latestAgentVersion,
+    outdatedCount,
+    upgradeState,
+}) {
     const counts = useMemo(() => fleetCounts(devices, samples), [devices, samples]);
     const alerts = useMemo(() => activeAlerts(devices, samples), [devices, samples]);
     const versions = useMemo(() => agentVersionCounts(devices, samples), [devices, samples]);
     const kinds = useMemo(() => deviceKindCounts(devices), [devices]);
-    const { stdout } = useStdout();
-    // Right column splits its height between AGENT VERSIONS and EVENTS; same
-    // idea for left column with FLEET and ACTIVE ALERTS. Reserve header (3) +
-    // footer (3) for the outer chrome, then half the remainder to each panel,
-    // minus 4 rows of per-panel chrome (border, title, margin).
-    const halfPanelRows = Math.max(
-        4,
-        Math.floor(((stdout?.rows || 40) - 6) / 2) - 4,
-    );
     const sortedFleet = useMemo(() => {
         const order = { bad: 0, warn: 1, on: 2, off: 3 };
         return [...devices].sort((a, b) => {
@@ -196,12 +246,48 @@ export function OverviewTab({ devices, samples, history, events }) {
     const lastDisk = history.disk?.at?.(-1);
 
     const versionsMax = Math.max(1, ...versions.map(([, c]) => c));
-    const versionRows = versions.map(([v, c], i) => ({
-        v,
-        c,
-        level: i === 0 ? 'new' : i === 1 ? 'old' : 'ancient',
-    }));
-    const stale = versions.slice(1).reduce((a, [, c]) => a + c, 0);
+    // Target = whichever is newer: the CDN's published `latest` or the
+    // highest semver we've actually observed on the fleet. We fall back to
+    // the local max so the panel stays useful when the CDN lookup fails
+    // (airgap, DNS, whatever) — outdated still resolves against the newest
+    // thing we know about.
+    const localMax = versions[0]?.[0];
+    const target = (() => {
+        if (!latestAgentVersion) return localMax || null;
+        if (!localMax) return latestAgentVersion;
+        return compareAgentVersions(latestAgentVersion, localMax) <= 0
+            ? latestAgentVersion
+            : localMax;
+    })();
+    const versionRows = versions.map(([v, c]) => {
+        let level;
+        if (!target || v === target) level = 'target';
+        else {
+            const diff = compareAgentVersions(v, target);
+            // positive = older than target; >0 but only a step away is "old",
+            // anything bigger is "ancient". We approximate "a step" as the
+            // row right after target in the sorted list.
+            level = diff > 0 ? 'old' : 'target';
+        }
+        return { v, c, level };
+    });
+    // Re-mark rows: first non-target is "old", the rest are "ancient".
+    let seenOld = false;
+    for (const row of versionRows) {
+        if (row.level === 'target') continue;
+        if (!seenOld) {
+            row.level = 'old';
+            seenOld = true;
+        } else {
+            row.level = 'ancient';
+        }
+    }
+    const stale =
+        typeof outdatedCount === 'number'
+            ? outdatedCount
+            : versions
+                  .filter(([v]) => target && v !== target && compareAgentVersions(v, target) > 0)
+                  .reduce((a, [, c]) => a + c, 0);
 
     return (
         <Box flexGrow={1}>
@@ -232,6 +318,31 @@ export function OverviewTab({ devices, samples, history, events }) {
                         </Box>
                     )}
                 </Panel>
+                {productMetrics?.metrics?.length > 0 && (
+                    <Panel
+                        title="CUSTOM METRICS"
+                        sub={`${productMetrics.metrics.length}`}
+                        right={
+                            productMetrics.error ? (
+                                <Text color={theme.red}>err</Text>
+                            ) : (
+                                <Text color={theme.fgFaint}>product</Text>
+                            )
+                        }
+                        flexGrow={0}
+                        flexShrink={0}
+                    >
+                        {productMetrics.metrics.map((m) => (
+                            <MetricRow
+                                key={m.name}
+                                metric={m}
+                                value={productMetrics.values[m.name]}
+                                history={productMetrics.history?.[m.name]}
+                                lastUpdate={productMetrics.lastUpdate[m.name]}
+                            />
+                        ))}
+                    </Panel>
+                )}
                 <Panel
                     title="ACTIVE ALERTS"
                     sub={`${alerts.length}`}
@@ -245,7 +356,7 @@ export function OverviewTab({ devices, samples, history, events }) {
                     }
                 >
                     {alerts.length === 0 && <Text color={theme.fgFaint}>no active alerts</Text>}
-                    {alerts.slice(0, halfPanelRows).map((a, i) => (
+                    {alerts.map((a, i) => (
                         <AlertRow key={i} a={a} />
                     ))}
                 </Panel>
@@ -287,6 +398,7 @@ export function OverviewTab({ devices, samples, history, events }) {
                                     device={d}
                                     sample={sample}
                                     health={health}
+                                    cpuSeries={cpuHistory?.[d.device]}
                                 />
                             );
                         })}
@@ -296,7 +408,19 @@ export function OverviewTab({ devices, samples, history, events }) {
 
             {/* Right column: versions + events */}
             <Box width="28%" flexDirection="column">
-                <Panel title="AGENT VERSIONS" sub="deployed" flexGrow={0} flexShrink={0}>
+                <Panel
+                    title="AGENT VERSIONS"
+                    sub={target ? `latest ${target}` : 'deployed'}
+                    right={
+                        upgradeState?.phase === 'running' ? (
+                            <Text color={theme.accent}>● running</Text>
+                        ) : stale > 0 ? (
+                            <Text color={theme.fgFaint}>u · upgrade</Text>
+                        ) : null
+                    }
+                    flexGrow={0}
+                    flexShrink={0}
+                >
                     {versionRows.length === 0 && (
                         <Text color={theme.fgFaint}>waiting for samples…</Text>
                     )}
@@ -309,12 +433,35 @@ export function OverviewTab({ devices, samples, history, events }) {
                             level={r.level}
                         />
                     ))}
-                    {stale > 0 && (
+                    {upgradeState?.phase === 'running' && upgradeState.progress && (
                         <Box marginTop={1}>
-                            <Text color={theme.amber}>⚠ </Text>
-                            <Text color={theme.fgDim}>{stale} pending upgrade</Text>
+                            <Text color={theme.accent}>↻ </Text>
+                            <Text color={theme.fg}>
+                                updating {upgradeState.progress.done}/{upgradeState.progress.total}…
+                            </Text>
                         </Box>
                     )}
+                    {upgradeState?.phase === 'done' && upgradeState.summary && (
+                        <Box marginTop={1}>
+                            <Text color={upgradeState.aborted ? theme.amber : theme.lime}>
+                                {upgradeState.aborted ? '⚠ ' : '✓ '}
+                            </Text>
+                            <Text color={theme.fg}>
+                                {upgradeState.summary.ok} ok · {upgradeState.summary.failed} failed
+                                {upgradeState.aborted ? ` (${upgradeState.reason})` : ''}
+                            </Text>
+                        </Box>
+                    )}
+                    {upgradeState?.phase !== 'running' &&
+                        upgradeState?.phase !== 'done' &&
+                        stale > 0 && (
+                            <Box marginTop={1}>
+                                <Text color={theme.amber}>⚠ </Text>
+                                <Text color={theme.fgDim}>
+                                    {stale} pending upgrade
+                                </Text>
+                            </Box>
+                        )}
                 </Panel>
                 <Panel
                     title="EVENTS"
@@ -324,7 +471,7 @@ export function OverviewTab({ devices, samples, history, events }) {
                     }
                 >
                     {events.length === 0 && <Text color={theme.fgFaint}>waiting for activity…</Text>}
-                    {events.slice(0, halfPanelRows).map((e, i) => (
+                    {events.map((e, i) => (
                         <EventRow key={`${e.t}-${e.dev}-${i}`} e={e} isFirst={i === 0} />
                     ))}
                 </Panel>

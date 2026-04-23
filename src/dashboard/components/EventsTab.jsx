@@ -8,6 +8,7 @@ const KIND = {
     leave: { color: theme.amber },
     err: { color: theme.red },
     info: { color: theme.accent },
+    upd: { color: theme.accent },
     deploy: { color: theme.magenta },
 };
 

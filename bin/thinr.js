@@ -34,6 +34,7 @@ for (let i = 2; i < process.argv.length; i++) {
 detectJsonModeFromArgv();
 import { authenticate } from '../lib/auth.js';
 import { deviceCommand } from '../commands/device/index.js';
+import { fleetCommand } from '../commands/fleet/index.js';
 import { logoutCommand } from '../commands/logout.js';
 import { playbookCommand } from '../commands/playbook/index.js';
 import { productCommand } from '../commands/product/index.js';
@@ -58,6 +59,7 @@ program
     .option('--profile <name>', 'Configuration profile to use (defaults to the saved default)');
 
 deviceCommand(program);
+fleetCommand(program);
 productCommand(program);
 playbookCommand(program);
 dashboardCommand(program);
