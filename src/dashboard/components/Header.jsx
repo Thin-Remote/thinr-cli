@@ -7,6 +7,7 @@ const TABS = [
     { id: 'devices', label: 'devices', key: '2' },
     { id: 'alerts', label: 'alerts', key: '3' },
     { id: 'events', label: 'events', key: '4' },
+    { id: 'playbooks', label: 'playbooks', key: '5' },
 ];
 
 function Tab({ label, keyHint, active }) {

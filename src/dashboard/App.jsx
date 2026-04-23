@@ -8,6 +8,7 @@ import { DeviceDetailPanel } from './components/DeviceDetailPanel.jsx';
 import { OverviewTab } from './components/OverviewTab.jsx';
 import { AlertsTab } from './components/AlertsTab.jsx';
 import { EventsTab } from './components/EventsTab.jsx';
+import { PlaybooksTab } from './components/PlaybooksTab.jsx';
 import { useDevices } from './hooks/useDevices.js';
 import { useFleetMonitoringStream } from './hooks/useFleetMonitoringStream.js';
 import { useProductMetrics } from './hooks/useProductMetrics.js';
@@ -27,12 +28,12 @@ const MIN_ROWS = 18;
 
 const TAB_HINTS = {
     overview: [
-        { k: '1-4', label: 'tabs' },
+        { k: '1-5', label: 'tabs' },
         { k: 'u', label: 'upgrade' },
         { k: 'q', label: 'quit' },
     ],
     devices: [
-        { k: '1-4', label: 'tabs' },
+        { k: '1-5', label: 'tabs' },
         { k: '↑↓', label: 'nav' },
         { k: 's', label: 'sort' },
         { k: 'p', label: 'pause' },
@@ -42,11 +43,21 @@ const TAB_HINTS = {
         { k: 'q', label: 'quit' },
     ],
     alerts: [
-        { k: '1-4', label: 'tabs' },
+        { k: '1-5', label: 'tabs' },
         { k: 'q', label: 'quit' },
     ],
     events: [
-        { k: '1-4', label: 'tabs' },
+        { k: '1-5', label: 'tabs' },
+        { k: 'q', label: 'quit' },
+    ],
+    playbooks: [
+        { k: '1-5', label: 'tabs' },
+        { k: '↑↓', label: 'nav' },
+        { k: 'tab', label: 'panel' },
+        { k: 't', label: 'test' },
+        { k: 'f', label: 'fleet' },
+        { k: 'x', label: 'delete' },
+        { k: 'p', label: 'product' },
         { k: 'q', label: 'quit' },
     ],
 };
@@ -62,6 +73,7 @@ export function App({ server, onAction }) {
     const [filtering, setFiltering] = useState(false);
     const [paused, setPaused] = useState(false);
     const [logsClearToken, setLogsClearToken] = useState(0);
+    const [playbookModalActive, setPlaybookModalActive] = useState(false);
     const [size, setSize] = useState(() => ({
         cols: stdout?.columns ?? 80,
         rows: stdout?.rows ?? 24,
@@ -100,6 +112,10 @@ export function App({ server, onAction }) {
         // will handle enter/esc/toggles. Duplicating key handling here would
         // have the tab keys still flipping the view behind the modal.
         if (upgrade.state.phase === 'confirming') return;
+        // Same rule for playbook overlays: vars editor, run progress,
+        // device picker, confirm delete and report viewer all manage
+        // their own input inside PlaybooksTab.
+        if (playbookModalActive) return;
         if (filtering) {
             if (key.escape) {
                 setFilter('');
@@ -262,6 +278,15 @@ export function App({ server, onAction }) {
             {tab === 'alerts' && <AlertsTab devices={devices} samples={samples} />}
 
             {tab === 'events' && <EventsTab events={events} />}
+
+            {tab === 'playbooks' && (
+                <PlaybooksTab
+                    devices={devices}
+                    defaultProductId={DASHBOARD_PRODUCT}
+                    focused={tab === 'playbooks'}
+                    onModalActiveChange={setPlaybookModalActive}
+                />
+            )}
 
             <Footer hints={TAB_HINTS[tab]} right="v1.2.0 · agent ok" />
         </Box>
