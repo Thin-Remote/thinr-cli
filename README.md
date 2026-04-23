@@ -611,7 +611,57 @@ npm link            # makes `thinr` available on $PATH
 node bin/thinr.js   # or run directly without linking
 ```
 
-There are no automated tests yet — contributions welcome.
+Unit tests live under `tests/` and run offline:
+
+```bash
+npm test
+```
+
+### Integration tests
+
+The product-playbook end-to-end script at
+[`tests/integration/playbook-e2e.js`](tests/integration/playbook-e2e.js)
+drives a real ThinRemote cloud through the full playbook lifecycle
+(create product → upload flat/extended/internal playbooks → list →
+download → replace → reject invalid inputs → optionally run in
+`check` mode against a device → delete). Cleanup of the temporary
+product and its file storage is unconditional (`try / finally`),
+even if the run fails halfway.
+
+Prerequisites:
+
+- An authenticated CLI profile (`thinr` once, or `THINR_PROFILE=<name>`
+  pointing at an existing entry in `~/.config/thinr-cli/config.json`).
+- The account must be allowed to create products and file storages.
+
+Invocations:
+
+```bash
+# Offline checks only — parses fixtures, exercises resolveVarScope,
+# asserts the dry-run plan. No network access. Safe in CI without
+# credentials.
+node tests/integration/playbook-e2e.js --offline
+
+# Full flow against the active profile. Creates a throw-away product
+# named "playbook-e2e-<timestamp>-<rand>" and deletes it on exit.
+node tests/integration/playbook-e2e.js
+
+# Add a test device to exercise `check`-mode execution with and
+# without variable overrides. The device must belong to the active
+# user; it does NOT need to be bound to the temporary product.
+THINR_E2E_DEVICE=<device-id> node tests/integration/playbook-e2e.js
+```
+
+The script only touches resources it creates itself (identified by
+the `playbook-e2e-` product-id prefix). If a run is interrupted
+before the `finally` cleanup executes — e.g. the process is killed
+— list leftovers with `thinr product list --json` and drop each one
+through the MCP `thinr_product_delete` tool (from an AI client) or
+via a Node one-liner reusing `deleteProductWithStorage` from
+`lib/product.js`.
+
+No credentials or tokens are ever written to the repository; the
+script reads them from the standard CLI profile store.
 
 ## License
 
