@@ -1,6 +1,8 @@
 // @ts-check
 import { registerProductListCommand } from './list.js';
 import { registerProductPropertyCommand } from './property.js';
+import { registerProductPropertyAdminCommands } from './props.js';
+import { registerProductMetricCommands } from './metric.js';
 import { registerProductResourceCommand } from './resource.js';
 import { registerProductExecCommand } from './exec.js';
 import { registerProductStatusCommand } from './status.js';
@@ -20,6 +22,8 @@ export function productCommand(program) {
     registerProductListCommand(product);
     registerProductStatusCommand(product);
     registerProductPropertyCommand(product);
+    registerProductPropertyAdminCommands(product);
+    registerProductMetricCommands(product);
     registerProductResourceCommand(product);
     registerProductExecCommand(product);
     registerProductFsCommands(product);
