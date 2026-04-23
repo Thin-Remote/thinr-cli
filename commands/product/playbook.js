@@ -1,15 +1,32 @@
 // @ts-check
 import { readFileSync, writeFileSync } from 'fs';
 import Table from 'cli-table3';
+import YAML from 'yaml';
+import { confirm } from '@inquirer/prompts';
 import {
     deleteProductPlaybook,
+    findProductPlaybook,
     listProductPlaybooks,
     readProductPlaybook,
     uploadProductPlaybook,
 } from '../../lib/product.js';
-import { hint, info, label, muted, success, warning } from '../../lib/format.js';
+import { parsePlaybook } from '../../lib/playbook/loader.js';
+import { buildDryRunPlan, runPlaybook } from '../../lib/playbook/runner.js';
+import { coerceCliVarValue, listVariables, resolveVarScope } from '../../lib/playbook/vars.js';
+import { getDevices } from '../../lib/devices.js';
+import { inputError } from '../../lib/errors.js';
+import {
+    accent,
+    error as errorStyle,
+    hint,
+    info,
+    label,
+    muted,
+    success,
+    warning,
+} from '../../lib/format.js';
 import { classifyError, createSpinner, isJsonMode, printErr, printOk } from '../../lib/output.js';
-import { applyJsonFlag, ensureConfigured, getGlobalUser } from '../_shared.js';
+import { applyJsonFlag, collectKeyValue, ensureConfigured, getGlobalUser } from '../_shared.js';
 
 async function readAllStdin() {
     const chunks = [];
@@ -210,16 +227,251 @@ function registerDelete(playbook) {
         });
 }
 
+function loadVarsFile(filePath) {
+    const raw = readFileSync(filePath, 'utf8');
+    const trimmed = raw.trim();
+    if (!trimmed) return {};
+    try {
+        const parsed = YAML.parse(raw);
+        if (parsed == null) return {};
+        if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw inputError(
+                `--vars-file "${filePath}" must contain a mapping of variable names to values.`,
+            );
+        }
+        return parsed;
+    } catch (err) {
+        if (err.code === 'input_error') throw err;
+        throw inputError(`Failed to parse --vars-file "${filePath}": ${err.message}`);
+    }
+}
+
+function collectCliOverrides(pb, cliVarEntries, varsFilePath) {
+    const merged = varsFilePath ? { ...loadVarsFile(varsFilePath) } : {};
+    for (const [name, raw] of Object.entries(cliVarEntries || {})) {
+        merged[name] = coerceCliVarValue(pb, name, raw);
+    }
+    return merged;
+}
+
+function renderStepResult(step, stepIndex) {
+    const header = `${String(stepIndex + 1).padStart(2)}. ${step.name}`;
+    if (step.skipped) {
+        return `  ${muted('·')} ${label(header)}  ${muted(step.summary)}`;
+    }
+    if (!step.ok) {
+        return `  ${errorStyle('!')} ${label(header)}  ${errorStyle(step.summary)}`;
+    }
+    const verdict = step.verdict;
+    let tag = success('+');
+    if (verdict === 'unchanged') tag = muted('=');
+    else if (verdict === 'unknown') tag = hint('?');
+    const duration = muted(` (${step.durationMs}ms)`);
+    return `  ${tag} ${label(header)}  ${muted(step.summary)}${duration}`;
+}
+
+async function maybeConfirm({ productId, name, deviceId, steps, skipPrompt }) {
+    if (skipPrompt) return true;
+    if (isJsonMode()) return true;
+    if (!process.stdin.isTTY) return true;
+    const message = `${accent('Run')} playbook "${name}" on product "${productId}" against device "${deviceId}" (${steps} step${steps === 1 ? '' : 's'})?`;
+    return confirm({ message, default: false });
+}
+
+function registerRun(playbook) {
+    playbook
+        .command('run <productId> <name>')
+        .helpGroup('Playbooks:')
+        .description('Run a product playbook against a single device (safe pre-flight before rollout)')
+        .requiredOption('-d, --device <id>', 'Target device ID (single-device only)')
+        .option(
+            '-v, --var <key=value>',
+            'Override a playbook variable (repeatable, values coerced to the declared type)',
+            collectKeyValue,
+            {},
+        )
+        .option('--vars-file <path>', 'Load variable overrides from a YAML/JSON file')
+        .option('--dry-run', 'Print the resolved plan without contacting the device')
+        .option('--check', 'Contact the device read-only and report what each step would change')
+        .option('-y, --yes', 'Skip the interactive confirmation prompt')
+        .option('-j, --json', 'Output as JSON')
+        .action(async (productId, name, opts, cmd) => {
+            applyJsonFlag(opts);
+            ensureConfigured();
+            const user = getGlobalUser(cmd);
+
+            let content;
+            try {
+                const entry = await findProductPlaybook(productId, name, user);
+                if (!entry) {
+                    printErr(
+                        `Playbook "${name}" is not registered on product "${productId}". Available: ${(await listProductPlaybooks(productId, user)).map((e) => e.name).join(', ') || '(none)'}`,
+                        { code: 'not_found' },
+                    );
+                    return;
+                }
+                content = await readProductPlaybook(productId, name, user);
+            } catch (err) {
+                const { message, code } = classifyError(err);
+                printErr(message, { code });
+                return;
+            }
+
+            let pb;
+            try {
+                pb = parsePlaybook(content, { sourcePath: `${name}.yaml` });
+            } catch (err) {
+                const { message } = classifyError(err);
+                printErr(message, { code: 'input_error' });
+                return;
+            }
+
+            let overrides;
+            try {
+                overrides = collectCliOverrides(pb, opts.var, opts.varsFile);
+            } catch (err) {
+                const { message, code } = classifyError(err);
+                printErr(message, { code: code === 'error' ? 'input_error' : code });
+                return;
+            }
+
+            let resolvedScope;
+            try {
+                resolvedScope = resolveVarScope(pb, overrides);
+            } catch (err) {
+                printErr(err.message, { code: 'input_error' });
+                return;
+            }
+
+            pb.target.devices = [opts.device];
+            pb.target.product = productId;
+            pb.target.group = null;
+
+            // ── Dry-run path ─────────────────────────────────────────
+            if (opts.dryRun) {
+                const plan = buildDryRunPlan(pb, { overrides });
+                if (isJsonMode()) {
+                    printOk({
+                        product: productId,
+                        name,
+                        device: opts.device,
+                        variables: listVariables(pb),
+                        vars: resolvedScope,
+                        steps: plan,
+                    });
+                    return;
+                }
+                console.log(`${label(pb.name || name)} ${muted(`(dry-run · ${opts.device})`)}`);
+                if (pb.description) console.log(muted(pb.description));
+                console.log(label(`\nPlan (${plan.length} step${plan.length === 1 ? '' : 's'}):`));
+                for (const s of plan) {
+                    const pause = s.pause_after ? muted(`  then pause ${s.pause_after}s`) : '';
+                    console.log(
+                        `  ${hint(String(s.index + 1).padStart(2) + '.')} ` +
+                            `${label(s.name)}  ${muted(`(${s.action})`)}${pause}`,
+                    );
+                }
+                return;
+            }
+
+            // ── Confirmation ─────────────────────────────────────────
+            let confirmed;
+            try {
+                confirmed = await maybeConfirm({
+                    productId,
+                    name,
+                    deviceId: opts.device,
+                    steps: pb.steps.length,
+                    skipPrompt: !!opts.yes || !!opts.check,
+                });
+            } catch (err) {
+                printErr(err.message, { code: 'input_error' });
+                return;
+            }
+            if (!confirmed) {
+                if (isJsonMode()) {
+                    printOk({ product: productId, name, device: opts.device, cancelled: true });
+                } else {
+                    console.log(warning('Cancelled.'));
+                }
+                return;
+            }
+
+            // ── Resolve the single device ────────────────────────────
+            let device;
+            try {
+                const all = await getDevices({ product: productId }, user);
+                device =
+                    all.find((d) => d.device === opts.device) || {
+                        device: opts.device,
+                        connection: { active: false },
+                    };
+            } catch (err) {
+                const { message, code } = classifyError(err);
+                printErr(message, { code });
+                return;
+            }
+
+            // ── Execute ──────────────────────────────────────────────
+            const verb = opts.check ? 'Checking' : 'Running';
+            const spinner = createSpinner(`${verb} "${name}" on ${opts.device}...`).start();
+            let results;
+            try {
+                results = await runPlaybook(pb, [device], {
+                    user,
+                    concurrency: 1,
+                    failFast: true,
+                    checkMode: !!opts.check,
+                    overrides,
+                });
+                spinner.stop();
+            } catch (err) {
+                spinner.fail(`${verb} failed`);
+                const { message, code } = classifyError(err);
+                printErr(message, { code });
+                return;
+            }
+
+            const result = results[0];
+
+            if (isJsonMode()) {
+                printOk({
+                    product: productId,
+                    name,
+                    device: opts.device,
+                    mode: opts.check ? 'check' : 'apply',
+                    ok: !!result?.ok,
+                    result,
+                });
+                return;
+            }
+
+            const titleTag = result?.ok ? success('OK') : errorStyle('FAILED');
+            console.log(
+                `${label(pb.name || name)} ${muted(`(${opts.check ? 'check' : 'apply'} · ${opts.device})`)}  ${titleTag}`,
+            );
+            if (Array.isArray(result?.steps)) {
+                for (const step of result.steps) {
+                    console.log(renderStepResult(step, step.index));
+                }
+            }
+            if (!result?.ok && result?.error) {
+                console.log(errorStyle(`\n${result.error}`));
+            }
+        });
+}
+
 export function registerProductPlaybookCommand(product) {
     const playbook = product
         .command('playbook')
         .helpGroup('Playbooks:')
         .description(
-            `Manage playbooks stored on a product. ${hint('Subcommands: list, upload, download, delete.')}`,
+            `Manage playbooks stored on a product. ${hint('Subcommands: list, upload, download, delete, run.')}`,
         );
 
     registerList(playbook);
     registerUpload(playbook);
     registerDownload(playbook);
     registerDelete(playbook);
+    registerRun(playbook);
 }

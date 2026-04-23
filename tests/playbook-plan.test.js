@@ -74,4 +74,64 @@ steps:
 `);
         assert.throws(() => buildDryRunPlan(pb), /Undefined playbook variable: ghost/);
     });
+
+    it('uses declared defaults when overrides are provided but empty', () => {
+        const pb = parsePlaybook(`
+target:
+  product: demo
+vars:
+  svc: nginx
+steps:
+  - action: exec
+    command: "systemctl restart {{ svc }}"
+`);
+        const plan = buildDryRunPlan(pb, { overrides: {} });
+        assert.match(plan[0].summary, /systemctl restart nginx/);
+    });
+
+    it('applies per-run overrides into the resolved summary', () => {
+        const pb = parsePlaybook(`
+target:
+  product: demo
+vars:
+  svc: nginx
+steps:
+  - action: exec
+    command: "systemctl restart {{ svc }}"
+`);
+        const plan = buildDryRunPlan(pb, { overrides: { svc: 'redis' } });
+        assert.match(plan[0].summary, /systemctl restart redis/);
+    });
+
+    it('rejects overrides for variables that do not exist in the playbook', () => {
+        const pb = parsePlaybook(`
+target:
+  product: demo
+steps:
+  - action: sleep
+    seconds: 1
+`);
+        assert.throws(
+            () => buildDryRunPlan(pb, { overrides: { ghost: '1' } }),
+            /Unknown playbook variable: ghost/,
+        );
+    });
+
+    it('fails when a required variable has no default and no override', () => {
+        const pb = parsePlaybook(`
+target:
+  product: demo
+vars:
+  release:
+    type: string
+    required: true
+steps:
+  - action: exec
+    command: "deploy {{ release }}"
+`);
+        assert.throws(
+            () => buildDryRunPlan(pb, { overrides: {} }),
+            /Required playbook variable "release" has no value/,
+        );
+    });
 });

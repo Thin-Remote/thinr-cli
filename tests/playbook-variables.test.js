@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePlaybook } from '../lib/playbook/loader.js';
-import { listVariables, resolveVarScope } from '../lib/playbook/vars.js';
+import { coerceCliVarValue, listVariables, resolveVarScope } from '../lib/playbook/vars.js';
 
 const stepsOnly = `
 steps:
@@ -177,5 +177,49 @@ describe('resolveVarScope', () => {
         assert.deepEqual(ok.conf, { a: 1 });
         assert.throws(() => resolveVarScope(pb, { debug: 'yes' }), /expects type boolean/);
         assert.throws(() => resolveVarScope(pb, { conf: 'nope' }), /expects type object/);
+    });
+});
+
+describe('coerceCliVarValue', () => {
+    it('passes string variables through unchanged', () => {
+        const pb = makePb('  svc: nginx\n');
+        assert.equal(coerceCliVarValue(pb, 'svc', 'redis'), 'redis');
+    });
+
+    it('parses numeric variables', () => {
+        const pb = makePb('  port:\n    default: 80\n    type: number\n');
+        assert.equal(coerceCliVarValue(pb, 'port', '9090'), 9090);
+    });
+
+    it('rejects numeric overrides that are not finite numbers', () => {
+        const pb = makePb('  port:\n    default: 80\n    type: number\n');
+        assert.throws(
+            () => coerceCliVarValue(pb, 'port', 'eighty'),
+            /expects a number/,
+        );
+    });
+
+    it('parses boolean variables from "true" / "false"', () => {
+        const pb = makePb('  debug:\n    default: false\n    type: boolean\n');
+        assert.equal(coerceCliVarValue(pb, 'debug', 'true'), true);
+        assert.equal(coerceCliVarValue(pb, 'debug', 'false'), false);
+        assert.throws(
+            () => coerceCliVarValue(pb, 'debug', 'yes'),
+            /expects true or false/,
+        );
+    });
+
+    it('parses object variables via JSON', () => {
+        const pb = makePb('  conf:\n    default: {}\n    type: object\n');
+        assert.deepEqual(coerceCliVarValue(pb, 'conf', '{"k":1}'), { k: 1 });
+        assert.throws(
+            () => coerceCliVarValue(pb, 'conf', 'not json'),
+            /expects a JSON object\/array/,
+        );
+    });
+
+    it('passes unknown variable names through so resolveVarScope can reject them', () => {
+        const pb = makePb('  svc: nginx\n');
+        assert.equal(coerceCliVarValue(pb, 'ghost', 'boo'), 'boo');
     });
 });
