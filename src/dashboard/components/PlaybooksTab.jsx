@@ -326,15 +326,15 @@ export function PlaybooksTab({
         { isActive: focused && runPhase === 'running' },
     );
 
-    // Done-phase input (dismiss).
+    // Done-phase input (dismiss). Any key dismisses — the user is only
+    // waiting to close the view, not typing, so being permissive avoids
+    // leaving them stuck if they hit something other than esc/return.
     useInput(
         (input, key) => {
             if (runPhase !== 'done') return;
-            if (key.escape || key.return) {
-                run.dismissDone();
-                refresh();
-                if (selected) loadReports(selected.name);
-            }
+            run.dismissDone();
+            refresh();
+            if (selected) loadReports(selected.name);
         },
         { isActive: focused && runPhase === 'done' },
     );
