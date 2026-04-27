@@ -24,6 +24,13 @@ const BASELINE_ITEMS = 500; // cap on devices returned in the one-shot snapshot.
 // null, so keep to universal agent metrics — anything richer (temperature,
 // network rates, etc.) comes via the WS stream.
 const BASELINE_FIELDS = 'cpu.usage,memory.usage,disk.root.usage,uptime,agent.version';
+// Bound the baseline to recent samples. Without a time range the Mongo
+// `group_by=device` pipeline does a $sort over the whole bucket history
+// before $group/$first, which scales linearly with the number of fields
+// and trips the 10s gateway timeout once we ask for ~5 fields. Agents
+// publish every minute, so a five-minute window guarantees we catch
+// every active device while keeping the server-side sort tiny.
+const BASELINE_WINDOW_MIN = 5;
 const FLUSH_MS = 400; // coalesce bursts of writes before re-rendering.
 const MAX_EVENTS = 80;
 
@@ -62,6 +69,64 @@ export function useFleetMonitoringStream(devices) {
         .sort()
         .join(',');
 
+    // History pre-fill — per-minute averages over the last 40 minutes so
+    // the per-device CPU sparklines have shape on dashboard open instead
+    // of starting empty. The server's `agg + group_by` path skips the
+    // pre-group sort entirely, so it stays fast (~900ms for 99 devices)
+    // even though the time range is 40 min wide. WS frames take over on
+    // top once they start arriving.
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            const t0 = Date.now();
+            debugLog('http:fleet-history', 'start', { window_min: HISTORY });
+            try {
+                const data = await getMonitoringData({
+                    minutes: HISTORY,
+                    group_by: 'device',
+                    agg: '1m',
+                    agg_type: 'avg',
+                    fields: 'cpu.usage',
+                });
+                debugLog('http:fleet-history', 'end', {
+                    duration_ms: Date.now() - t0,
+                    rows: Array.isArray(data) ? data.length : 0,
+                });
+                if (cancelled || !Array.isArray(data) || data.length === 0) return;
+                const byDevice = new Map();
+                for (const r of data) {
+                    const id = r.device;
+                    if (!id) continue;
+                    const v = r?.cpu?.usage;
+                    if (!Number.isFinite(Number(v))) continue;
+                    if (!byDevice.has(id)) byDevice.set(id, []);
+                    byDevice.get(id).push({ ts: Number(r.ts), v: Number(v) });
+                }
+                const next = { ...cpuHistoryRef.current };
+                for (const [id, rows] of byDevice.entries()) {
+                    rows.sort((a, b) => a.ts - b.ts);
+                    const series = rows.slice(-HISTORY).map((r) => r.v);
+                    // Don't clobber a series the WS already populated past
+                    // what the baseline can offer.
+                    if (!next[id] || next[id].length < series.length) {
+                        next[id] = series;
+                    }
+                }
+                cpuHistoryRef.current = next;
+                setCpuHistory(next);
+            } catch (err) {
+                debugLog('http:fleet-history', 'error', {
+                    duration_ms: Date.now() - t0,
+                    error: err?.message || String(err),
+                });
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // REST baseline — one sample per online device on first appearance.
     // Single multi-device call: with no `device` the helper defaults to
     // group_by=device and the server returns the latest sample per device.
@@ -78,6 +143,7 @@ export function useFleetMonitoringStream(devices) {
                     items: BASELINE_ITEMS,
                     sort: 'desc',
                     fields: BASELINE_FIELDS,
+                    minutes: BASELINE_WINDOW_MIN,
                 });
                 debugLog('http:fleet-baseline', 'end', {
                     duration_ms: Date.now() - t0,
