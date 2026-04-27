@@ -17,7 +17,10 @@ import { eventStream } from '../../../lib/dashboard/event-stream.js';
 //   device_state_change: { event, user, ts, device, product?, state }
 //   state ∈ connected | disconnected | resumed | awake | asleep
 
-const HISTORY = 40;
+// Last 30 minutes of per-device CPU history (one point per minute, since
+// agents publish at that cadence). Keeps the per-device sparklines and
+// the rolling fleet-wide chart on a clean half-hour window.
+const HISTORY = 30;
 const BUCKET = 'monitoring';
 const BASELINE_ITEMS = 500; // cap on devices returned in the one-shot snapshot.
 // Fields pulled on baseline. The server drops rows where any of these is
