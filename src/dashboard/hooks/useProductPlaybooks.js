@@ -9,6 +9,7 @@ import {
     readStorageFile,
 } from '../../../lib/storage.js';
 import { parsePlaybook } from '../../../lib/playbook/loader.js';
+import { debugCount, debugLog } from '../../../lib/debug-log.js';
 
 const RUNS_PREFIX = 'playbooks/runs/';
 
@@ -49,12 +50,24 @@ export function useProductPlaybooks(productId, { pollMs = 30_000 } = {}) {
         let cancelled = false;
         setLoading(true);
         async function load() {
+            const t0 = Date.now();
+            debugCount('http:playbook-index');
             try {
                 const list = await listProductPlaybooks(productId);
+                debugLog('http:playbook-index', 'end', {
+                    duration_ms: Date.now() - t0,
+                    product: productId,
+                    count: list?.length ?? 0,
+                });
                 if (cancelled) return;
                 setPlaybooks(list);
                 setListError(null);
             } catch (err) {
+                debugLog('http:playbook-index', 'error', {
+                    duration_ms: Date.now() - t0,
+                    product: productId,
+                    error: err?.message || String(err),
+                });
                 if (cancelled) return;
                 setListError(err?.message || String(err));
             } finally {

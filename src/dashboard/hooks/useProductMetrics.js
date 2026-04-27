@@ -4,6 +4,7 @@ import { readConfig } from '../../../lib/config.js';
 import { getProductProperty } from '../../../lib/product.js';
 import { callDeviceResource } from '../../../lib/resource.js';
 import { runPool } from '../../../lib/concurrency.js';
+import { debugCount, debugLog } from '../../../lib/debug-log.js';
 
 // Reads the `dashboard_metrics` property from a product and watches each
 // metric's resource across every device of the product via a persistent
@@ -59,13 +60,25 @@ export function useProductMetrics(productId, devices) {
         }
         let cancelled = false;
         (async () => {
+            const t0 = Date.now();
+            debugLog('http:metrics-list', 'start', { product: productId });
             try {
                 const value = await getProductProperty(productId, 'dashboard_metrics');
+                debugLog('http:metrics-list', 'end', {
+                    duration_ms: Date.now() - t0,
+                    product: productId,
+                    metric_count: Array.isArray(value) ? value.length : Array.isArray(value?.metrics) ? value.metrics.length : 0,
+                });
                 if (cancelled) return;
                 const list = Array.isArray(value) ? value : Array.isArray(value?.metrics) ? value.metrics : [];
                 setMetrics(list);
                 setError(null);
             } catch (e) {
+                debugLog('http:metrics-list', 'error', {
+                    duration_ms: Date.now() - t0,
+                    product: productId,
+                    error: e?.message || String(e),
+                });
                 if (cancelled) return;
                 if (/not found/i.test(e?.message || '')) {
                     setMetrics([]);
@@ -116,6 +129,10 @@ export function useProductMetrics(productId, devices) {
             const config = readConfig();
             if (!config?.server || !config?.token || !config?.username) return;
             const url = `wss://${config.server}/v2/users/${config.username}/events?authorization=${config.token}`;
+            debugLog('ws:metrics', 'connecting', {
+                product: productId,
+                resources: [...byResource.keys()],
+            });
             ws = new WebSocket(url);
 
             ws.on('open', () => {
@@ -124,6 +141,7 @@ export function useProductMetrics(productId, devices) {
                     return;
                 }
                 reconnectAttempts = 0;
+                debugLog('ws:metrics', 'open');
                 // One subscription per distinct resource. If any metric
                 // sharing the resource defines a positive interval, drive
                 // the stream at the smallest one (server expects ms); if
@@ -140,18 +158,25 @@ export function useProductMetrics(productId, devices) {
                     if (positives.length > 0) {
                         msg.params = { interval: Math.min(...positives) * 1000 };
                     }
+                    debugLog('ws:metrics', 'subscribe', msg);
                     ws.send(JSON.stringify(msg));
                 }
             });
 
             ws.on('message', (raw) => {
+                const bytes = raw?.length ?? 0;
+                debugCount('ws:metrics:bytes', bytes);
+                debugCount('ws:metrics:frames');
                 let frame;
                 try {
                     frame = JSON.parse(raw.toString('utf8'));
                 } catch {
                     return;
                 }
-                if (frame?.registered || frame?.success === false) return;
+                if (frame?.registered || frame?.success === false) {
+                    debugLog('ws:metrics', 'ack', frame);
+                    return;
+                }
                 if (frame?.event !== 'device_resource_stream') return;
                 if (frame.signal && frame.signal !== 'data') return;
 
@@ -159,6 +184,7 @@ export function useProductMetrics(productId, devices) {
                 const device = frame.device;
                 const payload = frame.payload;
                 if (!resource || !device || payload == null) return;
+                debugCount(`ws:metrics:resource:${resource}`);
                 const names = byResource.get(resource);
                 if (!names) return;
 
@@ -176,15 +202,18 @@ export function useProductMetrics(productId, devices) {
                 }
             });
 
-            ws.on('error', () => {
+            ws.on('error', (err) => {
+                debugLog('ws:metrics', 'error', { error: err?.message || String(err) });
                 // surfaced via close.
             });
 
-            ws.on('close', () => {
+            ws.on('close', (code, reason) => {
                 ws = null;
+                debugLog('ws:metrics', 'close', { code, reason: reason?.toString?.() });
                 if (disposed) return;
                 const attempt = reconnectAttempts++;
                 const delay = Math.min(2 ** attempt * 1000, MAX_BACKOFF_MS);
+                debugLog('ws:metrics', 'reconnect-scheduled', { attempt, delay_ms: delay });
                 reconnectTimer = setTimeout(connect, delay);
             });
         }
@@ -196,12 +225,21 @@ export function useProductMetrics(productId, devices) {
                 (d) => d.connection?.active && (!d.product || d.product === productId),
             );
             if (pool.length === 0) return;
+            debugLog('http:metrics-baseline', 'start', {
+                product: productId,
+                metrics: metrics.length,
+                devices: pool.length,
+                expected_calls: metrics.length * pool.length,
+            });
+            const t0 = Date.now();
             for (const metric of metrics) {
                 const results = await runPool(pool, BASELINE_CONCURRENCY, async (d) => {
                     try {
                         const data = await callDeviceResource(d.device, metric.resource);
+                        debugCount('http:metrics-baseline:calls');
                         return { device: d.device, value: getPath(data, metric.field) };
-                    } catch {
+                    } catch (err) {
+                        debugCount('http:metrics-baseline:errors');
                         return { device: d.device, value: null };
                     }
                 });
@@ -220,6 +258,10 @@ export function useProductMetrics(productId, devices) {
                 }));
                 setLastUpdate((cur) => ({ ...cur, [metric.name]: Date.now() }));
             }
+            debugLog('http:metrics-baseline', 'end', {
+                product: productId,
+                duration_ms: Date.now() - t0,
+            });
         })();
 
         connect();

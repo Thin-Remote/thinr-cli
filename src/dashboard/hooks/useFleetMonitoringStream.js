@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import WebSocket from 'ws';
 import { readConfig } from '../../../lib/config.js';
 import { getMonitoringData } from '../../../lib/monitoring.js';
+import { debugCount, debugLog } from '../../../lib/debug-log.js';
 
 // Fleet-wide monitoring + connection events driven by the user-level
 // /v2/.../events websocket. A single persistent socket carries two
@@ -75,11 +76,17 @@ export function useFleetMonitoringStream(devices) {
         if (missing.length === 0) return;
         let cancelled = false;
         (async () => {
+            const t0 = Date.now();
+            debugLog('http:fleet-baseline', 'start', { missing: missing.length });
             try {
                 const data = await getMonitoringData({
                     items: BASELINE_ITEMS,
                     sort: 'desc',
                     fields: BASELINE_FIELDS,
+                });
+                debugLog('http:fleet-baseline', 'end', {
+                    duration_ms: Date.now() - t0,
+                    rows: Array.isArray(data) ? data.length : 0,
                 });
                 if (cancelled || !Array.isArray(data)) return;
                 const missingSet = new Set(missing);
@@ -91,7 +98,11 @@ export function useFleetMonitoringStream(devices) {
                 }
                 if (Object.keys(updates).length === 0) return;
                 applyUpdates(updates);
-            } catch {
+            } catch (err) {
+                debugLog('http:fleet-baseline', 'error', {
+                    duration_ms: Date.now() - t0,
+                    error: err?.message || String(err),
+                });
                 // Baseline is best-effort; the WS stream will fill samples in.
             }
         })();
@@ -117,6 +128,7 @@ export function useFleetMonitoringStream(devices) {
             // the WS upgrade.
             const url = `wss://${config.server}/v2/users/${config.username}/events?authorization=${config.token}`;
             setStatus('connecting');
+            debugLog('ws:fleet', 'connecting', { url: `wss://${config.server}/v2/users/${config.username}/events` });
             const ws = new WebSocket(url);
             wsRef.current = ws;
 
@@ -127,20 +139,19 @@ export function useFleetMonitoringStream(devices) {
                 }
                 reconnectAttemptsRef.current = 0;
                 setStatus('open');
-                ws.send(
-                    JSON.stringify({
-                        event: 'bucket_write',
-                        filters: { bucket: BUCKET },
-                    }),
-                );
-                ws.send(
-                    JSON.stringify({
-                        event: 'device_state_change',
-                    }),
-                );
+                debugLog('ws:fleet', 'open');
+                const sub1 = { event: 'bucket_write', filters: { bucket: BUCKET } };
+                const sub2 = { event: 'device_state_change' };
+                debugLog('ws:fleet', 'subscribe', sub1);
+                debugLog('ws:fleet', 'subscribe', sub2);
+                ws.send(JSON.stringify(sub1));
+                ws.send(JSON.stringify(sub2));
             });
 
             ws.on('message', (raw) => {
+                const bytes = raw?.length ?? 0;
+                debugCount('ws:fleet:bytes', bytes);
+                debugCount('ws:fleet:frames');
                 let frame;
                 try {
                     frame = JSON.parse(raw.toString('utf8'));
@@ -148,9 +159,13 @@ export function useFleetMonitoringStream(devices) {
                     return;
                 }
                 // Ignore subscribe acks.
-                if (frame?.registered || frame?.success === false) return;
+                if (frame?.registered || frame?.success === false) {
+                    debugLog('ws:fleet', 'ack', frame);
+                    return;
+                }
 
                 if (frame?.event === 'bucket_write') {
+                    debugCount('ws:fleet:bucket_write');
                     const data = frame.data;
                     const id = data?.device;
                     if (!id || !data) return;
@@ -162,6 +177,7 @@ export function useFleetMonitoringStream(devices) {
                 }
 
                 if (frame?.event === 'device_state_change') {
+                    debugCount('ws:fleet:device_state_change');
                     const id = frame.device;
                     if (!id) return;
                     const mapped = mapState(frame.state);
@@ -176,16 +192,19 @@ export function useFleetMonitoringStream(devices) {
                 }
             });
 
-            ws.on('error', () => {
+            ws.on('error', (err) => {
+                debugLog('ws:fleet', 'error', { error: err?.message || String(err) });
                 // Surface via close — ws emits 'close' right after 'error'.
             });
 
-            ws.on('close', () => {
+            ws.on('close', (code, reason) => {
                 wsRef.current = null;
+                debugLog('ws:fleet', 'close', { code, reason: reason?.toString?.() });
                 if (disposedRef.current) return;
                 setStatus('retrying');
                 const attempt = reconnectAttemptsRef.current++;
                 const delay = Math.min(2 ** attempt * 1000, MAX_BACKOFF_MS);
+                debugLog('ws:fleet', 'reconnect-scheduled', { attempt, delay_ms: delay });
                 setTimeout(connect, delay);
             });
         }
