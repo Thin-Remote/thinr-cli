@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import WebSocket from 'ws';
-import { readConfig } from '../../../lib/config.js';
 import { getProductProperty } from '../../../lib/product.js';
 import { callDeviceResource } from '../../../lib/resource.js';
 import { runPool } from '../../../lib/concurrency.js';
 import { debugCount, debugLog } from '../../../lib/debug-log.js';
+import { eventStream } from '../../../lib/dashboard/event-stream.js';
 
 // Reads the `dashboard_metrics` property from a product and watches each
 // metric's resource across every device of the product via a persistent
@@ -13,7 +12,6 @@ import { debugCount, debugLog } from '../../../lib/debug-log.js';
 // frame arrives (the stream has no backfill).
 
 const BASELINE_CONCURRENCY = 15;
-const MAX_BACKOFF_MS = 30_000;
 const HISTORY_LEN = 32;
 
 function getPath(obj, dotted) {
@@ -93,18 +91,14 @@ export function useProductMetrics(productId, devices) {
         };
     }, [productId]);
 
-    // Live stream: one persistent websocket subscribes to
-    // `device_resource_stream` for each metric's resource, filtered by
-    // product. Server emits a data frame per connected device every
-    // metric.interval seconds; we keep a per-device map and recompute
-    // the aggregate on each frame.
+    // Live stream via the shared event stream singleton. Subscribes to
+    // `device_resource_stream` once per distinct resource (filtered by
+    // product); the singleton handles connection, replay on reconnect,
+    // and dispatching frames whose `event` matches.
     useEffect(() => {
         if (!productId || metrics.length === 0) return;
 
         let disposed = false;
-        let ws = null;
-        let reconnectAttempts = 0;
-        let reconnectTimer = null;
         // metric.name → { interval, field, aggregation, perDevice: {device: value} }
         const state = new Map();
         for (const metric of metrics) {
@@ -124,102 +118,46 @@ export function useProductMetrics(productId, devices) {
             byResource.get(s.resource).push(name);
         }
 
-        function connect() {
-            if (disposed) return;
-            const config = readConfig();
-            if (!config?.server || !config?.token || !config?.username) return;
-            const url = `wss://${config.server}/v2/users/${config.username}/events?authorization=${config.token}`;
-            debugLog('ws:metrics', 'connecting', {
-                product: productId,
-                resources: [...byResource.keys()],
-            });
-            ws = new WebSocket(url);
+        eventStream.connect();
+        const offFrame = eventStream.on('device_resource_stream', (frame) => {
+            if (frame.signal && frame.signal !== 'data') return;
+            const resource = frame.resource;
+            const device = frame.device;
+            const payload = frame.payload;
+            if (!resource || !device || payload == null) return;
+            const names = byResource.get(resource);
+            if (!names) return;
+            debugCount(`ws:events:resource:${resource}`);
+            for (const name of names) {
+                const s = state.get(name);
+                const v = getPath(payload, s.field);
+                s.perDevice[device] = v;
+                const agg = aggregate(Object.values(s.perDevice), s.aggregation);
+                setValues((cur) => ({ ...cur, [name]: agg }));
+                setHistory((cur) => ({
+                    ...cur,
+                    [name]: [...(cur[name] || []), agg].slice(-HISTORY_LEN),
+                }));
+                setLastUpdate((cur) => ({ ...cur, [name]: Date.now() }));
+            }
+        });
 
-            ws.on('open', () => {
-                if (disposed) {
-                    ws.close();
-                    return;
-                }
-                reconnectAttempts = 0;
-                debugLog('ws:metrics', 'open');
-                // One subscription per distinct resource. If any metric
-                // sharing the resource defines a positive interval, drive
-                // the stream at the smallest one (server expects ms); if
-                // none do, subscribe without interval so the stream relays
-                // whatever the device pushes on its own.
-                for (const [resource, names] of byResource.entries()) {
-                    const positives = names
-                        .map((n) => state.get(n).interval)
-                        .filter((v) => v > 0);
-                    const msg = {
-                        event: 'device_resource_stream',
-                        filters: { product: productId, resource },
-                    };
-                    if (positives.length > 0) {
-                        msg.params = { interval: Math.min(...positives) * 1000 };
-                    }
-                    debugLog('ws:metrics', 'subscribe', msg);
-                    ws.send(JSON.stringify(msg));
-                }
-            });
-
-            ws.on('message', (raw) => {
-                const bytes = raw?.length ?? 0;
-                debugCount('ws:metrics:bytes', bytes);
-                debugCount('ws:metrics:frames');
-                let frame;
-                try {
-                    frame = JSON.parse(raw.toString('utf8'));
-                } catch {
-                    return;
-                }
-                if (frame?.registered || frame?.success === false) {
-                    debugLog('ws:metrics', 'ack', frame);
-                    return;
-                }
-                if (frame?.event !== 'device_resource_stream') return;
-                if (frame.signal && frame.signal !== 'data') return;
-
-                const resource = frame.resource;
-                const device = frame.device;
-                const payload = frame.payload;
-                if (!resource || !device || payload == null) return;
-                debugCount(`ws:metrics:resource:${resource}`);
-                const names = byResource.get(resource);
-                if (!names) return;
-
-                for (const name of names) {
-                    const s = state.get(name);
-                    const v = getPath(payload, s.field);
-                    s.perDevice[device] = v;
-                    const agg = aggregate(Object.values(s.perDevice), s.aggregation);
-                    setValues((cur) => ({ ...cur, [name]: agg }));
-                    setHistory((cur) => ({
-                        ...cur,
-                        [name]: [...(cur[name] || []), agg].slice(-HISTORY_LEN),
-                    }));
-                    setLastUpdate((cur) => ({ ...cur, [name]: Date.now() }));
-                }
-            });
-
-            ws.on('error', (err) => {
-                debugLog('ws:metrics', 'error', { error: err?.message || String(err) });
-                // surfaced via close.
-            });
-
-            ws.on('close', (code, reason) => {
-                ws = null;
-                debugLog('ws:metrics', 'close', { code, reason: reason?.toString?.() });
-                if (disposed) return;
-                const attempt = reconnectAttempts++;
-                const delay = Math.min(2 ** attempt * 1000, MAX_BACKOFF_MS);
-                debugLog('ws:metrics', 'reconnect-scheduled', { attempt, delay_ms: delay });
-                reconnectTimer = setTimeout(connect, delay);
-            });
+        for (const [resource, names] of byResource.entries()) {
+            const positives = names
+                .map((n) => state.get(n).interval)
+                .filter((v) => v > 0);
+            const msg = {
+                event: 'device_resource_stream',
+                filters: { product: productId, resource },
+            };
+            if (positives.length > 0) {
+                msg.params = { interval: Math.min(...positives) * 1000 };
+            }
+            eventStream.subscribe(msg);
         }
 
-        // REST baseline on mount so the UI has a value before the first
-        // stream frame. One sample per online device of the product.
+        // REST baseline so the UI has a value before the first stream
+        // frame. One sample per online device of the product.
         (async () => {
             const pool = (devicesRef.current || []).filter(
                 (d) => d.connection?.active && (!d.product || d.product === productId),
@@ -264,19 +202,10 @@ export function useProductMetrics(productId, devices) {
             });
         })();
 
-        connect();
-
         return () => {
             disposed = true;
-            if (reconnectTimer) clearTimeout(reconnectTimer);
-            if (ws) {
-                try {
-                    ws.close();
-                } catch {
-                    // ignore
-                }
-                ws = null;
-            }
+            offFrame();
+            eventStream.disconnect();
         };
     }, [productId, metrics]);
 

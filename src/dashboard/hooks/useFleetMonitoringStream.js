@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import WebSocket from 'ws';
-import { readConfig } from '../../../lib/config.js';
 import { getMonitoringData } from '../../../lib/monitoring.js';
-import { debugCount, debugLog } from '../../../lib/debug-log.js';
+import { debugLog } from '../../../lib/debug-log.js';
+import { eventStream } from '../../../lib/dashboard/event-stream.js';
 
 // Fleet-wide monitoring + connection events driven by the user-level
 // /v2/.../events websocket. A single persistent socket carries two
@@ -26,7 +25,6 @@ const BASELINE_ITEMS = 500; // cap on devices returned in the one-shot snapshot.
 // network rates, etc.) comes via the WS stream.
 const BASELINE_FIELDS = 'cpu.usage,memory.usage,disk.root.usage,uptime,agent.version';
 const FLUSH_MS = 400; // coalesce bursts of writes before re-rendering.
-const MAX_BACKOFF_MS = 30_000;
 const MAX_EVENTS = 80;
 
 function tsStr(ts) {
@@ -55,9 +53,6 @@ export function useFleetMonitoringStream(devices) {
     const cpuHistoryRef = useRef({});
     const pendingRef = useRef({});
     const flushTimerRef = useRef(null);
-    const wsRef = useRef(null);
-    const reconnectAttemptsRef = useRef(0);
-    const disposedRef = useRef(false);
 
     // Key used to avoid re-fetching REST baseline if the device set didn't
     // change — useDevices polls every 15s so the array reference flips often.
@@ -112,121 +107,51 @@ export function useFleetMonitoringStream(devices) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [onlineKey]);
 
-    // Persistent WS to /events with exponential backoff reconnect.
+    // Subscribe via the shared event stream. We don't own the socket;
+    // the singleton multiplexes fleet monitoring with product metrics
+    // so dashboard load = 1 WS, not N.
     useEffect(() => {
-        disposedRef.current = false;
+        eventStream.connect();
+        setStatus('connecting');
 
-        function connect() {
-            if (disposedRef.current) return;
-            const config = readConfig();
-            if (!config?.server || !config?.token || !config?.username) {
-                setStatus('idle');
-                return;
+        const offBucket = eventStream.on('bucket_write', (frame) => {
+            const data = frame.data;
+            const id = data?.device;
+            if (!id || !data) return;
+            pendingRef.current[id] = data;
+            if (flushTimerRef.current == null) {
+                flushTimerRef.current = setTimeout(flush, FLUSH_MS);
             }
-            // Backend only accepts the JWT via `?authorization=` on this
-            // endpoint — the Authorization header is rejected with 401 on
-            // the WS upgrade.
-            const url = `wss://${config.server}/v2/users/${config.username}/events?authorization=${config.token}`;
-            setStatus('connecting');
-            debugLog('ws:fleet', 'connecting', { url: `wss://${config.server}/v2/users/${config.username}/events` });
-            const ws = new WebSocket(url);
-            wsRef.current = ws;
+        });
+        const offState = eventStream.on('device_state_change', (frame) => {
+            const id = frame.device;
+            if (!id) return;
+            const mapped = mapState(frame.state);
+            const ev = {
+                t: tsStr(frame.ts),
+                kind: mapped.kind,
+                dev: id,
+                msg: mapped.msg,
+            };
+            setEvents((cur) => [ev, ...cur].slice(0, MAX_EVENTS));
+        });
 
-            ws.on('open', () => {
-                if (disposedRef.current) {
-                    ws.close();
-                    return;
-                }
-                reconnectAttemptsRef.current = 0;
-                setStatus('open');
-                debugLog('ws:fleet', 'open');
-                const sub1 = { event: 'bucket_write', filters: { bucket: BUCKET } };
-                const sub2 = { event: 'device_state_change' };
-                debugLog('ws:fleet', 'subscribe', sub1);
-                debugLog('ws:fleet', 'subscribe', sub2);
-                ws.send(JSON.stringify(sub1));
-                ws.send(JSON.stringify(sub2));
-            });
-
-            ws.on('message', (raw) => {
-                const bytes = raw?.length ?? 0;
-                debugCount('ws:fleet:bytes', bytes);
-                debugCount('ws:fleet:frames');
-                let frame;
-                try {
-                    frame = JSON.parse(raw.toString('utf8'));
-                } catch {
-                    return;
-                }
-                // Ignore subscribe acks.
-                if (frame?.registered || frame?.success === false) {
-                    debugLog('ws:fleet', 'ack', frame);
-                    return;
-                }
-
-                if (frame?.event === 'bucket_write') {
-                    debugCount('ws:fleet:bucket_write');
-                    const data = frame.data;
-                    const id = data?.device;
-                    if (!id || !data) return;
-                    pendingRef.current[id] = data;
-                    if (flushTimerRef.current == null) {
-                        flushTimerRef.current = setTimeout(flush, FLUSH_MS);
-                    }
-                    return;
-                }
-
-                if (frame?.event === 'device_state_change') {
-                    debugCount('ws:fleet:device_state_change');
-                    const id = frame.device;
-                    if (!id) return;
-                    const mapped = mapState(frame.state);
-                    const ev = {
-                        t: tsStr(frame.ts),
-                        kind: mapped.kind,
-                        dev: id,
-                        msg: mapped.msg,
-                    };
-                    setEvents((cur) => [ev, ...cur].slice(0, MAX_EVENTS));
-                    return;
-                }
-            });
-
-            ws.on('error', (err) => {
-                debugLog('ws:fleet', 'error', { error: err?.message || String(err) });
-                // Surface via close — ws emits 'close' right after 'error'.
-            });
-
-            ws.on('close', (code, reason) => {
-                wsRef.current = null;
-                debugLog('ws:fleet', 'close', { code, reason: reason?.toString?.() });
-                if (disposedRef.current) return;
-                setStatus('retrying');
-                const attempt = reconnectAttemptsRef.current++;
-                const delay = Math.min(2 ** attempt * 1000, MAX_BACKOFF_MS);
-                debugLog('ws:fleet', 'reconnect-scheduled', { attempt, delay_ms: delay });
-                setTimeout(connect, delay);
-            });
-        }
-
-        connect();
+        eventStream.subscribe({ event: 'bucket_write', filters: { bucket: BUCKET } });
+        eventStream.subscribe({ event: 'device_state_change' });
+        // Surface a coarse status — the singleton handles the
+        // open/close/retry lifecycle internally.
+        setStatus('open');
+        debugLog('ws:fleet', 'subscribed-via-shared-stream');
 
         return () => {
-            disposedRef.current = true;
+            offBucket();
+            offState();
             if (flushTimerRef.current) {
                 clearTimeout(flushTimerRef.current);
                 flushTimerRef.current = null;
             }
-            if (wsRef.current) {
-                try {
-                    wsRef.current.close();
-                } catch {
-                    // ignore
-                }
-                wsRef.current = null;
-            }
+            eventStream.disconnect();
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     function flush() {
