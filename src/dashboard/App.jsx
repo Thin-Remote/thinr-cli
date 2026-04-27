@@ -95,7 +95,7 @@ export function App({ server, onAction }) {
 
     const { devices, loading, error } = useDevices();
     const { samples, history, cpuHistory, events, pushEvent } = useFleetMonitoringStream(devices);
-    const productMetrics = useProductMetrics(DASHBOARD_PRODUCT, devices);
+    const productMetrics = useProductMetrics(DASHBOARD_PRODUCT);
     const { latest: latestAgentVersion } = useLatestAgentVersion();
     const upgrade = useUpgradeController({ onEvent: pushEvent });
     const counts = useMemo(() => fleetCounts(devices, samples), [devices, samples]);

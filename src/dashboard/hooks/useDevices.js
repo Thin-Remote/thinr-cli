@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { getDevices } from '../../../lib/devices.js';
 import { debugCount, debugLog } from '../../../lib/debug-log.js';
 
-export function useDevices({ pollMs = 15000 } = {}) {
+// Connect/disconnect ride the WS via `device_state_change`, so this poll
+// only exists to catch fleet membership changes (added or removed
+// devices). Those are rare events; once a minute is plenty.
+export function useDevices({ pollMs = 60_000 } = {}) {
     const [devices, setDevices] = useState([]);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);

@@ -1,7 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getProductProperty } from '../../../lib/product.js';
-import { callDeviceResource } from '../../../lib/resource.js';
-import { runPool } from '../../../lib/concurrency.js';
 import { debugCount, debugLog } from '../../../lib/debug-log.js';
 import { eventStream } from '../../../lib/dashboard/event-stream.js';
 
@@ -11,7 +9,6 @@ import { eventStream } from '../../../lib/dashboard/event-stream.js';
 // baseline runs at mount so the UI has a value before the first stream
 // frame arrives (the stream has no backfill).
 
-const BASELINE_CONCURRENCY = 15;
 const HISTORY_LEN = 32;
 
 function getPath(obj, dotted) {
@@ -39,14 +36,12 @@ function aggregate(values, mode) {
     }
 }
 
-export function useProductMetrics(productId, devices) {
+export function useProductMetrics(productId) {
     const [metrics, setMetrics] = useState([]);
     const [values, setValues] = useState({});
     const [history, setHistory] = useState({});
     const [lastUpdate, setLastUpdate] = useState({});
     const [error, setError] = useState(null);
-    const devicesRef = useRef(devices);
-    devicesRef.current = devices;
 
     // Load the metric list once per product id. Treat "property missing"
     // as an empty list so a fresh product doesn't fill the UI with an
@@ -156,51 +151,13 @@ export function useProductMetrics(productId, devices) {
             eventStream.subscribe(msg);
         }
 
-        // REST baseline so the UI has a value before the first stream
-        // frame. One sample per online device of the product.
-        (async () => {
-            const pool = (devicesRef.current || []).filter(
-                (d) => d.connection?.active && (!d.product || d.product === productId),
-            );
-            if (pool.length === 0) return;
-            debugLog('http:metrics-baseline', 'start', {
-                product: productId,
-                metrics: metrics.length,
-                devices: pool.length,
-                expected_calls: metrics.length * pool.length,
-            });
-            const t0 = Date.now();
-            for (const metric of metrics) {
-                const results = await runPool(pool, BASELINE_CONCURRENCY, async (d) => {
-                    try {
-                        const data = await callDeviceResource(d.device, metric.resource);
-                        debugCount('http:metrics-baseline:calls');
-                        return { device: d.device, value: getPath(data, metric.field) };
-                    } catch (err) {
-                        debugCount('http:metrics-baseline:errors');
-                        return { device: d.device, value: null };
-                    }
-                });
-                if (disposed) return;
-                const s = state.get(metric.name);
-                for (const r of results) {
-                    if (r?.ok && r.value?.device) {
-                        s.perDevice[r.value.device] = r.value.value;
-                    }
-                }
-                const agg = aggregate(Object.values(s.perDevice), s.aggregation);
-                setValues((cur) => ({ ...cur, [metric.name]: agg }));
-                setHistory((cur) => ({
-                    ...cur,
-                    [metric.name]: [...(cur[metric.name] || []), agg].slice(-HISTORY_LEN),
-                }));
-                setLastUpdate((cur) => ({ ...cur, [metric.name]: Date.now() }));
-            }
-            debugLog('http:metrics-baseline', 'end', {
-                product: productId,
-                duration_ms: Date.now() - t0,
-            });
-        })();
+        // No REST baseline: the previous implementation made one IOTMP
+        // call per device per metric (~200 calls for 99 devices × 2
+        // metrics, ~10s wallclock and a real CPU spike on the backend),
+        // just to show values a few seconds earlier. The WS stream
+        // already pushes values for every device within the configured
+        // interval, so we let the panel render with placeholders until
+        // frames arrive.
 
         return () => {
             disposed = true;
