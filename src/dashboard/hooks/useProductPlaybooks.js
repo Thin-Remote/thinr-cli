@@ -21,11 +21,16 @@ function isRunFile(f, name) {
 }
 
 /**
- * Reads the playbook index of a product and keeps it refreshed. Also
- * exposes parsed-on-demand detail (YAML text + parsed structure) and
- * a list of run reports, both populated when a playbook is selected.
+ * Reads the playbook index of a product. The list rarely changes (only
+ * when a human or assistant uploads/deletes one), so we don't poll —
+ * the index loads once on mount and on demand via `refresh()`. The
+ * tab's `R` shortcut and any local action that mutates the index
+ * (upload/delete/rollout) call refresh themselves.
+ *
+ * Also exposes parsed-on-demand detail (YAML text + parsed structure)
+ * and a list of run reports, both populated when a playbook is selected.
  */
-export function useProductPlaybooks(productId, { pollMs = 30_000 } = {}) {
+export function useProductPlaybooks(productId) {
     const [playbooks, setPlaybooks] = useState([]);
     const [listError, setListError] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -75,12 +80,10 @@ export function useProductPlaybooks(productId, { pollMs = 30_000 } = {}) {
             }
         }
         load();
-        const id = setInterval(load, pollMs);
         return () => {
             cancelled = true;
-            clearInterval(id);
         };
-    }, [productId, pollMs, reloadToken]);
+    }, [productId, reloadToken]);
 
     const loadDetail = useCallback(async (name) => {
         if (!productId || !name) {
