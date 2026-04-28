@@ -57,6 +57,7 @@ const TAB_HINTS = {
         { k: 't', label: 'test' },
         { k: 'f', label: 'fleet' },
         { k: 'x', label: 'delete' },
+        { k: 'R', label: 'refresh' },
         { k: 'p', label: 'product' },
         { k: 'q', label: 'quit' },
     ],
