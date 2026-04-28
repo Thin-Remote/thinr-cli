@@ -1,0 +1,44 @@
+# Atomic-ish deploy: write the new artefact to a temp path, then move
+# it into place. The temp → final swap is the closest thing to atomic
+# you get without agent-side transactional FS support, and it keeps the
+# previous file intact on the failure paths. Pair with a `when` gate on
+# a register'd verify step for full "rollback" semantics.
+#
+#   thinr playbook run examples/atomic-deploy.yaml --dry-run
+#
+name: Atomic config deploy
+description: Drop a new config file into /etc/mi-app/config.json without a half-written read.
+
+target:
+    product: thinremote
+    concurrency: 5
+
+vars:
+    target_path: /etc/mi-app/config.json
+    staging_path: /etc/mi-app/config.json.new
+
+steps:
+    - name: Ensure config directory exists
+      action: mkdir
+      path: /etc/mi-app
+
+    - name: Write the new config to a staging path
+      action: write
+      path: "{{ staging_path }}"
+      content: |
+          {"version": "2.1.0", "feature_x": true}
+
+    - name: Move staging into place
+      action: mv
+      source: "{{ staging_path }}"
+      destination: "{{ target_path }}"
+      overwrite: true
+
+    - name: Restart the service to pick up the new config
+      action: exec
+      command: "systemctl restart mi-app"
+      pause_after: 2
+
+    - name: Verify the service came back up
+      action: exec
+      command: "systemctl is-active mi-app"

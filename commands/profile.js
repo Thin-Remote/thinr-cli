@@ -10,16 +10,21 @@ import {
 } from '../lib/config.js';
 import { authenticate } from '../lib/auth.js';
 import { setJsonMode, isJsonMode, printOk, printErr } from '../lib/output.js';
+import { hint, success, label } from '../lib/format.js';
 
 function applyJsonFlag(opts) {
     if (opts.json) setJsonMode(true);
 }
 
 export function profileCommand(program) {
-    const profile = program.command('profile').description('Manage configuration profiles');
+    const profile = program
+        .command('profile')
+        .helpGroup('Configuration:')
+        .description('Manage configuration profiles');
 
     profile
         .command('list')
+        .helpGroup('Profile:')
         .description('List configured profiles')
         .option('-j, --json', 'Output as JSON')
         .action((opts) => {
@@ -40,19 +45,20 @@ export function profileCommand(program) {
                 return;
             }
             if (!names.length) {
-                console.log(chalk.gray('No profiles configured. Run thinr to set one up.'));
+                console.log(hint('No profiles configured. Run thinr to set one up.'));
                 return;
             }
             for (const name of names) {
                 const data = getProfile(name) || {};
-                const marker = name === active ? chalk.green('* ') : '  ';
-                const detail = chalk.gray(`${data.username || ''}@${data.server || name}`);
-                console.log(`${marker}${chalk.bold(name)}  ${detail}`);
+                const marker = name === active ? success('* ') : '  ';
+                const detail = hint(`${data.username || ''}@${data.server || name}`);
+                console.log(`${marker}${label(name)}  ${detail}`);
             }
         });
 
     profile
         .command('current')
+        .helpGroup('Profile:')
         .description('Print the active profile')
         .option('-j, --json', 'Output as JSON')
         .action((opts) => {
@@ -63,7 +69,7 @@ export function profileCommand(program) {
                 return;
             }
             if (!name) {
-                console.log(chalk.gray('No active profile.'));
+                console.log(hint('No active profile.'));
                 return;
             }
             console.log(name);
@@ -71,6 +77,7 @@ export function profileCommand(program) {
 
     profile
         .command('use <name>')
+        .helpGroup('Profile:')
         .description('Set the default profile')
         .option('-j, --json', 'Output as JSON')
         .action((name, opts) => {
@@ -85,7 +92,7 @@ export function profileCommand(program) {
                 printOk({ active: name });
                 return;
             }
-            console.log(chalk.green(`Default profile set to ${name}`));
+            console.log(success(`Default profile set to ${name}`));
         });
 
     profile
@@ -147,6 +154,7 @@ export function profileCommand(program) {
 
     profile
         .command('delete <name>')
+        .helpGroup('Profile:')
         .description('Remove a profile')
         .option('-j, --json', 'Output as JSON')
         .action((name, opts) => {
@@ -160,6 +168,6 @@ export function profileCommand(program) {
                 printOk({ removed: name });
                 return;
             }
-            console.log(chalk.green(`Removed profile ${name}`));
+            console.log(success(`Removed profile ${name}`));
         });
 }

@@ -1,6 +1,6 @@
-import chalk from 'chalk';
 import ora from 'ora';
 import { deleteConfig, configExists } from '../lib/config.js';
+import { warning, error, hint } from '../lib/format.js';
 
 /**
  * Register the logout command
@@ -9,11 +9,12 @@ import { deleteConfig, configExists } from '../lib/config.js';
 export function logoutCommand(program) {
     program
         .command('logout')
+        .helpGroup('Configuration:')
         .description('Remove stored credentials and configuration')
         .action(async () => {
             // Check if configured
             if (!configExists()) {
-                console.log(chalk.yellow('No configuration found. Already logged out.'));
+                console.log(warning('No configuration found. Already logged out.'));
                 return;
             }
 
@@ -22,27 +23,25 @@ export function logoutCommand(program) {
             try {
                 // Delete local configuration
                 spinner.text = 'Removing local configuration...';
-                const success = deleteConfig();
+                const ok = deleteConfig();
 
-                if (success) {
+                if (ok) {
                     spinner.succeed('Logged out successfully. Configuration removed.');
                 } else {
                     spinner.fail('Failed to remove configuration.');
                     console.error(
-                        chalk.red(
+                        error(
                             'Error: Unable to delete configuration file. You may need to remove it manually.',
                         ),
                     );
                     console.error(
-                        chalk.gray('Configuration is stored in ~/.config/thinr-cli/config.json'),
+                        hint('Configuration is stored in ~/.config/thinr-cli/config.json'),
                     );
                 }
-            } catch (error) {
+            } catch (err) {
                 spinner.fail('Failed to remove configuration.');
-                console.error(chalk.red(`Error: ${error.message}`));
-                console.error(
-                    chalk.gray('Configuration is stored in ~/.config/thinr-cli/config.json'),
-                );
+                console.error(error(`Error: ${err.message}`));
+                console.error(hint('Configuration is stored in ~/.config/thinr-cli/config.json'));
             }
         });
 }

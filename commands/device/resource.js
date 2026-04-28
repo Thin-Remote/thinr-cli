@@ -4,12 +4,19 @@ import {
     listDeviceResourcesWithSchemas,
     formatDeviceResourcesWithSchemas,
 } from '../../lib/resource.js';
-import { isJsonMode, printOk, printErr, createSpinner, classifyError } from '../../lib/output.js';
-import { applyJsonFlag, collectInput, ensureConfigured } from './_shared.js';
+import { isJsonMode, printOk } from '../../lib/output.js';
+import {
+    applyJsonFlag,
+    collectInput,
+    ensureConfigured,
+    extractField,
+    runDeviceCommand,
+} from './_shared.js';
 
 export function registerResourceCommand(device) {
     device
         .command('resource <deviceId> [resource]')
+        .helpGroup('State & resources:')
         .description('List device resources, or call one by name')
         .option('-j, --json', 'Output as JSON')
         .option('-f, --field <field>', 'Extract a sub-field from the result (dot path)')
@@ -18,34 +25,28 @@ export function registerResourceCommand(device) {
             applyJsonFlag(opts);
             ensureConfigured();
             if (!resource) {
-                const spinner = createSpinner(`Getting resources for ${deviceId}...`).start();
-                try {
-                    const entries = await listDeviceResourcesWithSchemas(deviceId);
-                    spinner.succeed(`Successfully retrieved resources for ${deviceId}`);
-                    if (isJsonMode()) printOk(entries);
-                    else console.log(formatDeviceResourcesWithSchemas(deviceId, entries));
-                } catch (error) {
-                    spinner.fail('Resource retrieval failed');
-                    const { message, code } = classifyError(error);
-                    printErr(message, { code });
-                }
+                await runDeviceCommand({
+                    start: `Getting resources for ${deviceId}...`,
+                    fn: () => listDeviceResourcesWithSchemas(deviceId),
+                    success: `Successfully retrieved resources for ${deviceId}`,
+                    failure: 'Resource retrieval failed',
+                    onSuccess: (entries) => {
+                        if (isJsonMode()) printOk(entries);
+                        else console.log(formatDeviceResourcesWithSchemas(deviceId, entries));
+                    },
+                });
                 return;
             }
-            const spinner = createSpinner(
-                `Calling resource ${resource} for ${deviceId}...`,
-            ).start();
-            try {
-                const result = await callDeviceResource(deviceId, resource, opts.input);
-                spinner.succeed(`Resource ${resource} returned successfully for ${deviceId}`);
-                const value = opts.field
-                    ? opts.field.split('.').reduce((obj, key) => obj && obj[key], result)
-                    : result;
-                if (isJsonMode()) printOk(value);
-                else console.log(value);
-            } catch (error) {
-                spinner.fail('Resource call failed');
-                const { message, code } = classifyError(error);
-                printErr(message, { code });
-            }
+            await runDeviceCommand({
+                start: `Calling resource ${resource} for ${deviceId}...`,
+                fn: () => callDeviceResource(deviceId, resource, opts.input),
+                success: `Resource ${resource} returned successfully for ${deviceId}`,
+                failure: 'Resource call failed',
+                onSuccess: (result) => {
+                    const value = extractField(result, opts.field);
+                    if (isJsonMode()) printOk(value);
+                    else console.log(value);
+                },
+            });
         });
 }

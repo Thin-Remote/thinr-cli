@@ -7,6 +7,9 @@ import { registerPropertyCommand } from './property.js';
 import { registerResourceCommand } from './resource.js';
 import { registerExecCommand } from './exec.js';
 import { registerUpdateCommand } from './update.js';
+import { registerTransferCommands } from './transfer.js';
+import { registerFsCommands } from './fs.js';
+import { registerLogsCommand } from './logs.js';
 
 /**
  * `thinr device <subcommand> [<deviceId>] …` — all device-scoped actions
@@ -18,6 +21,7 @@ import { registerUpdateCommand } from './update.js';
 export function deviceCommand(program) {
     const device = program
         .command('device')
+        .helpGroup('Operations:')
         .description('Device commands (subcommand-first: thinr device <action> <deviceId>)');
 
     registerListCommand(device);
@@ -28,4 +32,7 @@ export function deviceCommand(program) {
     registerResourceCommand(device);
     registerExecCommand(device);
     registerUpdateCommand(device);
+    registerTransferCommands(device);
+    registerFsCommands(device);
+    registerLogsCommand(device);
 }

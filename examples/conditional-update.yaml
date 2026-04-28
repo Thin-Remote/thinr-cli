@@ -1,0 +1,39 @@
+# Playbook demonstrating `when` and `register`. Checks the agent
+# version on every online device of the `thinremote` product, and
+# only triggers an update on the ones that aren't already at
+# target_version.
+#
+#   thinr playbook run examples/conditional-update.yaml --dry-run
+#   thinr playbook run examples/conditional-update.yaml -v target_version=1.6.0
+#
+name: Conditional agent update
+description: Update the agent only where the running version differs.
+
+target:
+    product: thinremote
+    concurrency: 5
+
+vars:
+    target_version: "1.6.0"
+
+steps:
+    - name: Read current agent version
+      action: resource
+      resource: agent
+      register: agent_info
+
+    - name: Skip if already at target version
+      action: exec
+      command: "echo 'Already at {{ target_version }}, skipping.'"
+      when: "agent_info.result == target_version"
+
+    - name: Apply update
+      action: update
+      op: apply
+      channel: latest
+      when: "agent_info.result != target_version"
+      pause_after: 5
+
+    - name: Re-read version to confirm
+      action: resource
+      resource: agent

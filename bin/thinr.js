@@ -4,8 +4,8 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { Command } from 'commander';
-import chalk from 'chalk';
 import figlet from 'figlet';
+import { accent, info } from '../lib/format.js';
 import ora from 'ora';
 import { configExists, readConfig, setActiveProfile } from '../lib/config.js';
 import { detectJsonModeFromArgv } from '../lib/output.js';
@@ -34,22 +34,23 @@ for (let i = 2; i < process.argv.length; i++) {
 detectJsonModeFromArgv();
 import { authenticate } from '../lib/auth.js';
 import { deviceCommand } from '../commands/device/index.js';
+import { fleetCommand } from '../commands/fleet/index.js';
 import { logoutCommand } from '../commands/logout.js';
-import { productCommand } from '../commands/product.js';
+import { playbookCommand } from '../commands/playbook/index.js';
+import { productCommand } from '../commands/product/index.js';
 import { profileCommand } from '../commands/profile.js';
+import { dashboardCommand } from '../commands/dashboard.js';
 import { setBaseURL } from '../lib/api.js';
 import { startMCPServer } from '../lib/mcp/server.js';
 
-// Function to display the banner
 function displayBanner() {
-    console.log(chalk.cyan(figlet.textSync('thinr-cli', { horizontalLayout: 'full' })));
-    console.log(chalk.blue('Thin Remote CLI - Remote management for IoT devices'));
+    console.log(accent(figlet.textSync('thinr-cli', { horizontalLayout: 'full' })));
+    console.log(info('Thin Remote CLI - Remote management for IoT devices'));
     console.log();
 }
 
 const program = new Command();
 
-// Set up CLI information
 program
     .name('thinr')
     .description('CLI for ThinRemote - Remote management for IoT devices')
@@ -57,14 +58,17 @@ program
     .option('-u, --user <username>', 'API user override (admin impersonation)')
     .option('--profile <name>', 'Configuration profile to use (defaults to the saved default)');
 
-// Register commands
 deviceCommand(program);
+fleetCommand(program);
 productCommand(program);
+playbookCommand(program);
+dashboardCommand(program);
 profileCommand(program);
 logoutCommand(program);
 
 program
     .command('mcp')
+    .helpGroup('Integration:')
     .description('Start the MCP server (stdio) for AI tool integration')
     .action(async () => {
         try {

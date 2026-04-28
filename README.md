@@ -30,11 +30,13 @@ task at hand.
     - [JSON output](#json-output)
     - [`thinr device <action> [<deviceId>]`](#thinr-device-action-deviceid)
     - [`thinr product <action> <productId>`](#thinr-product-action-productid)
+    - [`thinr playbook <action>`](#thinr-playbook-action)
     - [`thinr profile`](#thinr-profile)
     - [`thinr logout`](#thinr-logout)
 - [Part 2 — MCP server](#part-2--mcp-server)
     - [Starting the server](#starting-the-server)
     - [Tool catalog](#tool-catalog)
+    - [Authoring playbooks from natural language](#authoring-playbooks-from-natural-language)
     - [Per-call controls](#per-call-controls)
     - [Integrating with Claude Code](#integrating-with-claude-code)
 - [Profiles and multi-account use](#profiles-and-multi-account-use)
@@ -299,6 +301,107 @@ Options:
 Offline devices are skipped for `resource` — the server would reject
 the call anyway.
 
+#### `exec`
+
+Run a shell command in parallel across every active device of the
+product and report a per-device status table plus each device's
+output:
+
+```bash
+thinr product exec <productId> <command...> [options]
+```
+
+Options:
+
+- `-j, --json`: Output as JSON. Emits a single envelope with a
+  `summary` block and a `results[]` array carrying stdout, stderr,
+  exit code, `timedOut` flag and per-device duration.
+- `-c, --concurrency <n>`: Max parallel executions (default: 10)
+- `--timeout <seconds>`: Per-device timeout (default: 30)
+- `--fail-fast`: Stop dequeueing new devices as soon as one fails
+- `-g, --group <group>`: Filter devices by asset group
+- `-a, --all`: Include offline devices (default: only active)
+
+Examples:
+
+```bash
+# hostname on every active device
+thinr product exec my-product hostname
+
+# apt upgrade across the fleet with 5 parallel slots and a long timeout
+thinr product exec my-product "apt-get -y upgrade" -c 5 --timeout 600
+
+# target only a subset of the product
+thinr product exec my-product "systemctl restart agent" -g staging
+```
+
+Also exposed as an MCP tool (`thinr_product_exec`) with the same
+parameters, so agents can drive a fleet operation with a single call
+instead of looping `thinr_exec` per device.
+
+#### `playbook`
+
+Manage playbooks stored on a product and run them against one device
+or the whole fleet:
+
+```bash
+thinr product playbook list     <productId> [--json]
+thinr product playbook upload   <productId> <name> [file] [--description <text>] [--skip-validation] [--json]
+thinr product playbook download <productId> <name> [-o <file>] [--json]
+thinr product playbook delete   <productId> <name> [--json]
+thinr product playbook run      <productId> <name> (--device <id> | --fleet) [options]
+```
+
+`upload` reads the YAML from a file, or from stdin when the path is
+omitted or `-`. The document is validated against the playbook schema
+before being written to the product storage; an invalid document is
+rejected with a descriptive error and nothing is uploaded. Pass
+`--skip-validation` only to work around a schema-runtime gap (do not
+use it to bypass real errors).
+
+`run` targets either a single device (`--device <id>`) or the whole
+fleet (`--fleet`, progressive batch rollout):
+
+- `-v, --var <key=value>` — override an overridable playbook variable
+  (repeatable; values are coerced to the declared type).
+- `--vars-file <path>` — load variable overrides from a YAML/JSON file.
+- `--dry-run` — print the resolved plan without contacting any device.
+- `--check` — contact devices read-only and report what each step would
+  change.
+- `--yes` / `-y` — skip the interactive confirmation prompt.
+
+Fleet-only options:
+
+- `--batch-size <n>` — devices attempted in parallel per batch
+  (default: 5).
+- `--failure-threshold <p>` — abort rollout when cumulative failure
+  rate reaches P% (default: 25).
+- `-g, --group <id>` — restrict to an asset group.
+- `--filter <key=value>` — extra server-side filter (repeatable).
+- `--include-offline` — attempt offline devices too (default: active
+  only).
+
+Each fleet rollout writes a persistent JSON report to
+`playbooks/runs/<timestamp>-<name>-<user>.json` in the product's file
+storage, capturing resolved variables, per-device outcomes, and any
+abort reason.
+
+### `thinr playbook <action>`
+
+Run or validate a local playbook YAML file (not stored on a product).
+Useful for one-shot or ad-hoc runs:
+
+```bash
+thinr playbook validate <file>
+thinr playbook run      <file> [--dry-run] [--check] [options]
+```
+
+`validate` parses the YAML and reports any schema errors. `run`
+resolves the target block declared inside the playbook and executes
+it; the same variable-override flags as `thinr product playbook run`
+apply. For playbooks that should be reusable across users, upload
+them to their product with `thinr product playbook upload` instead.
+
 ### `thinr profile`
 
 Manage the profile store (see [Profiles and multi-account
@@ -346,24 +449,85 @@ passed through (via the global flag) to impersonate another account.
 
 ### Tool catalog
 
-Roughly 28 tools, grouped by capability. Every tool accepts optional
-`device`, `user`, and `profile` arguments, so a single session can
-target any device/account/environment without restart.
+Grouped by capability. Every tool accepts optional `device`, `user`,
+and `profile` arguments, so a single session can target any
+device/account/environment without restart.
 
-| Area                  | Tools                                                                                                                 |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Discovery             | `thinr_devices` (with optional `query` for regex filtering), `thinr_device_info`, `thinr_profiles`                    |
-| Shell                 | `thinr_exec` (buffered), with streaming stdout/stderr                                                                 |
-| Filesystem            | `thinr_read`, `thinr_write`, `thinr_ls`, `thinr_mkdir`, `thinr_delete`, `thinr_move`                                  |
-| Resources             | `thinr_resource_list` (with `in`/`out` schemas), `thinr_resource_call`                                                |
-| Properties            | `thinr_property_get`, `thinr_property_set`                                                                            |
-| Scripts (device)      | `thinr_script_list`, `thinr_script_write`, `thinr_script_delete`                                                      |
-| Monitoring and update | `thinr_monitoring`, `thinr_update`                                                                                    |
-| Products              | `thinr_products`, `thinr_product_delete`, `thinr_device_set_product`                                                  |
-| Product scripts       | `thinr_product_script_list`, `thinr_product_script_read`, `thinr_product_script_write`, `thinr_product_script_delete` |
+| Area                  | Tools                                                                                                                                                                                        |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Discovery             | `thinr_devices` (with optional `query` for regex filtering), `thinr_device_info`, `thinr_profiles`                                                                                           |
+| Shell                 | `thinr_exec` (buffered), with streaming stdout/stderr                                                                                                                                        |
+| Filesystem            | `thinr_read`, `thinr_write`, `thinr_push`, `thinr_pull`, `thinr_ls`, `thinr_mkdir`, `thinr_rm`, `thinr_mv`                                                                                   |
+| Resources             | `thinr_resource_list` (with `in`/`out` schemas), `thinr_resource_call`                                                                                                                       |
+| Properties            | `thinr_property_get`, `thinr_property_set`                                                                                                                                                   |
+| Scripts (device)      | `thinr_script_list`, `thinr_script_write`, `thinr_script_delete`                                                                                                                             |
+| Monitoring and update | `thinr_monitoring`, `thinr_bucket_read`, `thinr_update`                                                                                                                                      |
+| Products              | `thinr_products`, `thinr_product_delete`, `thinr_device_set_product`, `thinr_product_exec`, `thinr_product_write`                                                                            |
+| Product scripts       | `thinr_product_script_list`, `thinr_product_script_read`, `thinr_product_script_write`, `thinr_product_script_delete`                                                                        |
+| Playbooks (authoring) | `thinr_playbook_schema`, `thinr_playbook_validate`, `thinr_playbook_run` (ad-hoc)                                                                                                            |
+| Product playbooks     | `thinr_product_playbook_list`, `thinr_product_playbook_read`, `thinr_product_playbook_write`, `thinr_product_playbook_run` (single device), `thinr_product_playbook_rollout` (fleet), `thinr_product_playbook_delete` |
 
 Full input/output schemas are published via standard MCP
 `list_tools`; the client will show them when you connect.
+
+### Authoring playbooks from natural language
+
+Playbooks are declarative YAML documents — steps like `exec`, `write`,
+`install_package`, `service`, plus a `target` block and a `vars`
+block — that the runner applies to a device or a fleet. With the MCP
+server connected, an AI assistant can turn a natural-language request
+into a validated playbook and store it on the relevant product
+without the user ever writing YAML by hand.
+
+The intended authoring loop is:
+
+1. **Fetch the schema.** Call `thinr_playbook_schema` once at the
+   start of the session to get the authoritative list of top-level
+   fields, target block, step actions with their parameters, and the
+   two accepted forms of the `vars` block (plain and extended).
+2. **Draft the YAML.** Translate the user's request into a playbook
+   draft. Use the extended `vars` form
+   (`default` / `description` / `type` / `overridable` / `required`)
+   whenever the user hints at knobs the caller may need to tune at
+   run time.
+3. **Validate and iterate.** Call `thinr_playbook_validate` with the
+   draft. On failure, read the consolidated error message, fix the
+   YAML, and call validate again. Never skip this step.
+4. **Upload.** Once validation is clean, call
+   `thinr_product_playbook_write` with the product id, a short name
+   (letters / digits / underscore / dash), and the validated YAML.
+   The tool re-validates server-side; never pass `skip_validation` to
+   mask a real error.
+5. **Pre-flight on one device.** Call
+   `thinr_product_playbook_run` with a single `device` (plus
+   `dry_run: true` or `check: true` for a read-only preview) to
+   confirm the steps behave as expected.
+6. **Roll out.** Finally, `thinr_product_playbook_rollout` rolls the
+   playbook across the fleet in batches with a failure-rate kill
+   switch, and writes a persistent report to `playbooks/runs/` in the
+   product file storage.
+
+Example prompt the user can give the assistant:
+
+> "On product `edge-gateways`, create a playbook called
+> `nginx-upgrade` that updates the nginx package, renders
+> `/etc/nginx/nginx.conf` from a template, and restarts nginx only
+> if the config check passes. Make `worker_connections` an
+> overridable integer variable, default 1024. Then try it on
+> `edge-gw-17` in check mode."
+
+A well-behaved assistant translates this into:
+
+- `thinr_playbook_schema` → read the authoring contract.
+- Draft YAML → `thinr_playbook_validate` until clean.
+- `thinr_product_playbook_write` with `product="edge-gateways"`,
+  `name="nginx-upgrade"`, and the validated content.
+- `thinr_product_playbook_run` with `device="edge-gw-17"` and
+  `check: true` to preview what would change.
+
+After that a second message like "looks good, roll it out to staging"
+maps to `thinr_product_playbook_rollout` with the matching
+`group` / `filter` and a conservative `batch_size`.
 
 ### Per-call controls
 
@@ -447,7 +611,57 @@ npm link            # makes `thinr` available on $PATH
 node bin/thinr.js   # or run directly without linking
 ```
 
-There are no automated tests yet — contributions welcome.
+Unit tests live under `tests/` and run offline:
+
+```bash
+npm test
+```
+
+### Integration tests
+
+The product-playbook end-to-end script at
+[`tests/integration/playbook-e2e.js`](tests/integration/playbook-e2e.js)
+drives a real ThinRemote cloud through the full playbook lifecycle
+(create product → upload flat/extended/internal playbooks → list →
+download → replace → reject invalid inputs → optionally run in
+`check` mode against a device → delete). Cleanup of the temporary
+product and its file storage is unconditional (`try / finally`),
+even if the run fails halfway.
+
+Prerequisites:
+
+- An authenticated CLI profile (`thinr` once, or `THINR_PROFILE=<name>`
+  pointing at an existing entry in `~/.config/thinr-cli/config.json`).
+- The account must be allowed to create products and file storages.
+
+Invocations:
+
+```bash
+# Offline checks only — parses fixtures, exercises resolveVarScope,
+# asserts the dry-run plan. No network access. Safe in CI without
+# credentials.
+node tests/integration/playbook-e2e.js --offline
+
+# Full flow against the active profile. Creates a throw-away product
+# named "playbook-e2e-<timestamp>-<rand>" and deletes it on exit.
+node tests/integration/playbook-e2e.js
+
+# Add a test device to exercise `check`-mode execution with and
+# without variable overrides. The device must belong to the active
+# user; it does NOT need to be bound to the temporary product.
+THINR_E2E_DEVICE=<device-id> node tests/integration/playbook-e2e.js
+```
+
+The script only touches resources it creates itself (identified by
+the `playbook-e2e-` product-id prefix). If a run is interrupted
+before the `finally` cleanup executes — e.g. the process is killed
+— list leftovers with `thinr product list --json` and drop each one
+through the MCP `thinr_product_delete` tool (from an AI client) or
+via a Node one-liner reusing `deleteProductWithStorage` from
+`lib/product.js`.
+
+No credentials or tokens are ever written to the repository; the
+script reads them from the standard CLI profile store.
 
 ## License
 

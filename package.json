@@ -1,6 +1,6 @@
 {
     "name": "@thinremote/thinr-cli",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "CLI for ThinRemote — remote management for IoT devices, with an MCP server for AI clients",
     "main": "bin/thinr.js",
     "bin": {
@@ -10,6 +10,7 @@
         "bin",
         "commands",
         "lib",
+        "dist",
         "CHANGELOG.md",
         "LICENSE",
         "README.md"
@@ -27,7 +28,10 @@
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "typecheck": "tsc",
-        "test": "node --test 'tests/**/*.test.js'"
+        "test": "node --test 'tests/**/*.test.js'",
+        "build:dashboard": "node scripts/build-dashboard.mjs",
+        "build:dashboard:watch": "node scripts/build-dashboard.mjs --watch",
+        "prepare": "node scripts/build-dashboard.mjs"
     },
     "keywords": [
         "cli",
@@ -42,17 +46,24 @@
     "author": "ThinRemote",
     "license": "MIT",
     "dependencies": {
+        "@inkjs/ui": "^2.0.0",
         "@inquirer/prompts": "^8.4.1",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "axios": "^1.10.0",
         "chalk": "^5.4.1",
+        "cli-progress": "^3.12.0",
+        "cli-table3": "^0.6.5",
         "commander": "^14.0.0",
         "conf": "^15.1.0",
         "figlet": "^1.8.1",
+        "ink": "^7.0.1",
+        "ink-gradient": "^4.0.0",
         "jsonwebtoken": "^9.0.2",
         "open": "^11.0.0",
         "ora": "^9.3.0",
-        "ws": "^8.18.2"
+        "react": "^19.2.5",
+        "ws": "^8.18.2",
+        "yaml": "^2.8.3"
     },
     "type": "module",
     "engines": {
@@ -61,6 +72,7 @@
     "devDependencies": {
         "@eslint/js": "^10.0.1",
         "@types/node": "^25.6.0",
+        "esbuild": "^0.28.0",
         "eslint": "^10.2.0",
         "eslint-config-prettier": "^10.1.8",
         "globals": "^17.5.0",
