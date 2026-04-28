@@ -237,7 +237,7 @@ export function PlaybooksTab({
                 setSelectedIdx(0);
                 return;
             }
-            if (input === 'R') {
+            if (input === 'r') {
                 refresh();
                 if (selected) loadReports(selected.name);
                 return;
