@@ -115,14 +115,23 @@ export function useProductMetrics(productId) {
 
         eventStream.connect();
         const offFrame = eventStream.on('device_resource_stream', (frame) => {
-            if (frame.signal && frame.signal !== 'data') return;
+            if (frame.signal && frame.signal !== 'data') {
+                debugCount(`ws:metrics:dropped:${frame.signal}`);
+                return;
+            }
             const resource = frame.resource;
             const device = frame.device;
             const payload = frame.payload;
-            if (!resource || !device || payload == null) return;
+            if (!resource || !device || payload == null) {
+                debugCount('ws:metrics:dropped:missing-fields');
+                return;
+            }
             const names = byResource.get(resource);
-            if (!names) return;
-            debugCount(`ws:events:resource:${resource}`);
+            if (!names) {
+                debugCount('ws:metrics:dropped:unknown-resource');
+                return;
+            }
+            debugCount(`ws:metrics:ok:${resource}`);
             for (const name of names) {
                 const s = state.get(name);
                 const v = getPath(payload, s.field);
