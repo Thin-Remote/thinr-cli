@@ -4,6 +4,7 @@ import { theme } from '../theme.js';
 import { Panel } from './Panel.jsx';
 import { Sparkline, colorForPct } from './Sparkline.jsx';
 import { deviceHealth } from '../lib/status.js';
+import { filterDevicesByMetric } from '../../../lib/dashboard/metric-filter.js';
 
 const SORT_OPTIONS = ['status', 'name', 'cpu', 'mem', 'disk', 'up'];
 
@@ -68,9 +69,16 @@ export function DevicesPanel({
     sort = 'status',
     filter = '',
     filtering = false,
+    metricFilter = null,
+    valuesByDevice = null,
 }) {
+    const scopedDevices = useMemo(
+        () => filterDevicesByMetric(devices, valuesByDevice, metricFilter),
+        [devices, valuesByDevice, metricFilter],
+    );
+
     const enriched = useMemo(() => {
-        return devices.map((d) => {
+        return scopedDevices.map((d) => {
             const sample = samples?.[d.device];
             return {
                 d,
@@ -82,7 +90,7 @@ export function DevicesPanel({
                 up: uptimeSeconds(sample),
             };
         });
-    }, [devices, samples, alarmSeverityByDevice]);
+    }, [scopedDevices, samples, alarmSeverityByDevice]);
 
     const sorted = useMemo(() => {
         const order = { bad: 0, warn: 1, on: 2, off: 3 };
@@ -154,13 +162,27 @@ export function DevicesPanel({
     const hiddenAbove = start;
     const hiddenBelow = sorted.length - end;
 
+    const subText =
+        metricFilter || filter
+            ? `${sorted.length} / ${devices.length}`
+            : `${sorted.length}`;
     return (
         <Panel
             title="DEVICES"
-            sub={`${sorted.length}${filter ? ` / ${devices.length}` : ''}`}
+            sub={subText}
             focused={focused}
             right={
-                filtering || filter ? (
+                metricFilter ? (
+                    <Text>
+                        <Text color={theme.fgFaint}>
+                            {metricFilter.label || metricFilter.metricKey} =
+                            {' '}
+                        </Text>
+                        <Text color={theme.accent} bold>
+                            {metricFilter.bucket}
+                        </Text>
+                    </Text>
+                ) : filtering || filter ? (
                     <Box>
                         <Text color={filtering ? theme.accent : theme.fgDim}>/</Text>
                         <Text color={theme.fg}>{filter}</Text>

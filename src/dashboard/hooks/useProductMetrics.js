@@ -36,6 +36,11 @@ export function useProductMetrics(productIds) {
     const [values, setValues] = useState({});
     const [history, setHistory] = useState({});
     const [lastUpdate, setLastUpdate] = useState({});
+    // Latest sample per (metricKey, deviceId). Mirrors the same per-device
+    // map the aggregator already holds, but exposed to React so panels can
+    // turn the bucket cursor into a device list filter ("which boxes
+    // reported this exact value?").
+    const [valuesByDevice, setValuesByDevice] = useState({});
     const [error, setError] = useState(null);
 
     // Load the metric list per product, in parallel, and concatenate.
@@ -165,6 +170,10 @@ export function useProductMetrics(productIds) {
                     [key]: [...(cur[key] || []), agg].slice(-HISTORY_LEN),
                 }));
                 setLastUpdate((cur) => ({ ...cur, [key]: Date.now() }));
+                setValuesByDevice((cur) => ({
+                    ...cur,
+                    [key]: { ...(cur[key] || {}), [device]: v },
+                }));
             }
         });
 
@@ -189,5 +198,5 @@ export function useProductMetrics(productIds) {
         };
     }, [metrics]);
 
-    return { metrics, values, history, lastUpdate, error };
+    return { metrics, values, history, lastUpdate, valuesByDevice, error };
 }

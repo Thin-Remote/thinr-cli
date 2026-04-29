@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, Text, useApp, useStdout } from 'ink';
 import { theme } from './theme.js';
 import { Header, TABS } from './components/Header.jsx';
@@ -96,6 +96,23 @@ function AppInner({ server, profile, profiles, onAction }) {
     const [filter, setFilter] = useState('');
     const [filtering, setFiltering] = useState(false);
     const [paused, setPaused] = useState(false);
+    // Active distribution-bucket filter on the devices list. Owned at
+    // the App level so the panel that emits it (a focusable in
+    // OverviewTab) and the panel that consumes it (DevicesPanel) don't
+    // need to share a sibling reference.
+    const [metricFilter, setMetricFilter] = useState(null);
+    const handleMetricFilterChange = useCallback((payload, clearedKey) => {
+        if (payload === null) {
+            // A panel signaled it stopped owning the filter. Only clear
+            // if we still hold its bucket — a sibling may have already
+            // taken over and we don't want to wipe their selection.
+            setMetricFilter((cur) =>
+                cur && cur.metricKey === clearedKey ? null : cur,
+            );
+            return;
+        }
+        setMetricFilter(payload);
+    }, []);
     const [logsClearToken, setLogsClearToken] = useState(0);
     const [playbookModalActive, setPlaybookModalActive] = useState(false);
     const [devicePickerOpen, setDevicePickerOpen] = useState(false);
@@ -379,6 +396,8 @@ function AppInner({ server, profile, profiles, onAction }) {
                     }}
                     devicesLoading={loading}
                     devicesError={error}
+                    metricFilter={metricFilter}
+                    onMetricFilterChange={handleMetricFilterChange}
                 />
             )}
 

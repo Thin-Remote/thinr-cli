@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Box, Text } from 'ink';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Box, Text, useStdout } from 'ink';
 import { theme } from '../theme.js';
 import { Panel } from './Panel.jsx';
 import { Sparkline } from './Sparkline.jsx';
@@ -36,6 +36,14 @@ const VERSIONS_HINT = [
     { k: '1-5', label: 'tabs' },
     { k: 'tab', label: 'panel' },
     { k: 'u', label: 'upgrade' },
+    { k: 'q', label: 'quit' },
+];
+
+const METRIC_LIST_HINT = [
+    { k: '1-5', label: 'tabs' },
+    { k: 'tab', label: 'panel' },
+    { k: '↑↓', label: 'bucket' },
+    { k: 'esc', label: 'clear' },
     { k: 'q', label: 'quit' },
 ];
 
@@ -399,6 +407,200 @@ function DistributionRows({ metric, value, lastUpdate }) {
     );
 }
 
+function bucketsFromValue(value) {
+    const isPlainObject =
+        value && typeof value === 'object' && !Array.isArray(value);
+    if (!isPlainObject) return [];
+    return Object.entries(value)
+        .filter(([, c]) => Number.isFinite(Number(c)) && Number(c) > 0)
+        .sort(
+            (a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]),
+        );
+}
+
+// Focusable per-metric panel: cursor walks the buckets, the slice window
+// keeps the selection visible when there are more buckets than rows, and
+// the current bucket bubbles up via `onBucketChange` so the devices panel
+// can filter to the matching machines.
+function DistributionPanel({
+    metric,
+    value,
+    lastUpdate,
+    productInfo,
+    activeMetricKey,
+    onBucketChange,
+    maxRows,
+}) {
+    const metricKey = `${metric.product}:${metric.name}`;
+    const display = productInfo?.[metric.product]?.name || metric.product || '';
+    const sorted = useMemo(() => bucketsFromValue(value), [value]);
+    const total = sorted.reduce((acc, [, c]) => acc + Number(c), 0);
+    const [selectedIdx, setSelectedIdx] = useState(-1);
+
+    const focus = useFocusable({
+        id: `overview-metric-${metricKey}`,
+        parent: 'overview',
+        hint: METRIC_LIST_HINT,
+        handlers: (input, key) => {
+            if (sorted.length === 0) return;
+            if (key.escape) {
+                setSelectedIdx(-1);
+                return;
+            }
+            if (key.upArrow) {
+                setSelectedIdx((cur) =>
+                    cur < 0 ? 0 : Math.max(0, cur - 1),
+                );
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIdx((cur) =>
+                    cur < 0 ? 0 : Math.min(sorted.length - 1, cur + 1),
+                );
+                return;
+            }
+            if (input === 'g') return setSelectedIdx(0);
+            if (input === 'G') return setSelectedIdx(sorted.length - 1);
+        },
+    });
+
+    // Drop the cursor on defocus so the filter doesn't outlive the panel
+    // that owns it (e.g. user tabs to a sibling, opens a modal, or
+    // switches tabs).
+    useEffect(() => {
+        if (!focus.focused) setSelectedIdx(-1);
+    }, [focus.focused]);
+
+    // Clamp the cursor to the visible range when the bucket list shrinks
+    // — sample updates can drop a bucket out from under the selection.
+    useEffect(() => {
+        if (selectedIdx >= 0 && selectedIdx >= sorted.length) {
+            setSelectedIdx(sorted.length === 0 ? -1 : sorted.length - 1);
+        }
+    }, [sorted.length, selectedIdx]);
+
+    const currentBucket =
+        focus.focused && selectedIdx >= 0 && sorted[selectedIdx]
+            ? sorted[selectedIdx][0]
+            : null;
+
+    // Only emit transitions: when the bucket we own changes, when we
+    // start emitting, or when we stop. Without the ref guard every panel
+    // would race to clear the global filter on every render.
+    const wasEmittingRef = useRef(false);
+    useEffect(() => {
+        if (currentBucket != null) {
+            onBucketChange?.({
+                product: metric.product,
+                metricKey,
+                bucket: currentBucket,
+                label: metric.label || metric.name,
+            });
+            wasEmittingRef.current = true;
+        } else if (wasEmittingRef.current) {
+            wasEmittingRef.current = false;
+            onBucketChange?.(null, metricKey);
+        }
+    }, [
+        currentBucket,
+        metricKey,
+        metric.product,
+        metric.label,
+        metric.name,
+        onBucketChange,
+    ]);
+
+    const total_buckets = sorted.length;
+    const visible = Math.min(maxRows, total_buckets);
+    let start = 0;
+    if (total_buckets > visible && selectedIdx >= 0) {
+        const half = Math.floor(visible / 2);
+        start = Math.max(
+            0,
+            Math.min(selectedIdx - half, total_buckets - visible),
+        );
+    }
+    const end = Math.min(total_buckets, start + visible);
+    const slice = sorted.slice(start, end);
+    const hiddenAbove = start;
+    const hiddenBelow = total_buckets - end;
+    const ageS = lastUpdate ? Math.round((Date.now() - lastUpdate) / 1000) : null;
+    const filteredByThisPanel = activeMetricKey === metricKey;
+
+    return (
+        <Panel
+            title={(metric.label || metric.name).toUpperCase()}
+            sub={total_buckets > 0 ? `${total_buckets}` : null}
+            focused={focus.focused}
+            right={
+                <Text>
+                    {filteredByThisPanel && (
+                        <Text color={theme.accent}>● </Text>
+                    )}
+                    <Text color={theme.fgFaint}>{display}</Text>
+                    {ageS != null && (
+                        <Text color={theme.fgFaint}> · {ageS}s</Text>
+                    )}
+                </Text>
+            }
+            flexGrow={0}
+            flexShrink={0}
+        >
+            {sorted.length === 0 ? (
+                <Text color={theme.fgFaint}>no samples yet</Text>
+            ) : (
+                <>
+                    {hiddenAbove > 0 && (
+                        <Text color={theme.fgFaint}>↑ {hiddenAbove} more</Text>
+                    )}
+                    {slice.map(([k, c], i) => {
+                        const idx = start + i;
+                        const isSel = idx === selectedIdx && focus.focused;
+                        const count = Number(c);
+                        const pct =
+                            total > 0 ? Math.round((count / total) * 100) : 0;
+                        return (
+                            <Box
+                                key={k}
+                                backgroundColor={isSel ? '#1a2030' : undefined}
+                            >
+                                <Box width={2}>
+                                    <Text color={isSel ? theme.accent : undefined}>
+                                        {isSel ? '▶' : ' '}
+                                    </Text>
+                                </Box>
+                                <Box flexGrow={1} flexBasis={0} minWidth={0}>
+                                    <Text
+                                        color={isSel ? theme.fg : theme.fg}
+                                        wrap="truncate-end"
+                                    >
+                                        {k}
+                                    </Text>
+                                </Box>
+                                <Box
+                                    width={6}
+                                    justifyContent="flex-end"
+                                    marginRight={1}
+                                >
+                                    <Text color={theme.accent} bold>
+                                        {count}
+                                    </Text>
+                                </Box>
+                                <Box width={5} justifyContent="flex-end">
+                                    <Text color={theme.fgFaint}>{pct}%</Text>
+                                </Box>
+                            </Box>
+                        );
+                    })}
+                    {hiddenBelow > 0 && (
+                        <Text color={theme.fgFaint}>↓ {hiddenBelow} more</Text>
+                    )}
+                </>
+            )}
+        </Panel>
+    );
+}
+
 function MetricRow({ metric, value, history, lastUpdate }) {
     if (metric.aggregation === 'distribution') {
         return (
@@ -469,8 +671,11 @@ export function OverviewTab({
     onRequestUpgrade,
     devicesLoading,
     devicesError,
+    metricFilter,
+    onMetricFilterChange,
 }) {
     useTabCycle('overview');
+    const { stdout } = useStdout();
 
     // Two views over the same alarm list: 'rule' collapses to one row per
     // alarm rule (better for triage), 'instance' shows one row per device
@@ -812,6 +1017,8 @@ export function OverviewTab({
                     sort={sort}
                     filter={filter}
                     filtering={filtering}
+                    metricFilter={metricFilter}
+                    valuesByDevice={productMetrics?.valuesByDevice}
                 />
             </Box>
 
@@ -874,39 +1081,40 @@ export function OverviewTab({
                         )}
                 </Panel>
                 {productMetrics?.metrics?.length > 0 &&
-                    groupMetricsByProduct(
-                        productMetrics.metrics.filter(
+                    (() => {
+                        const listMetrics = productMetrics.metrics.filter(
                             (m) => m.visualization === 'list',
-                        ),
-                    ).map(([product, list]) => {
-                        const display =
-                            productInfo?.[product]?.name || product || 'metrics';
-                        return (
-                            <Panel
-                                key={`list-${product}`}
-                                title={display.toUpperCase()}
-                                sub={`${list.length}`}
-                                right={
-                                    <Text color={theme.fgFaint}>{product}</Text>
-                                }
-                                flexGrow={0}
-                                flexShrink={0}
-                            >
-                                {list.map((m) => {
-                                    const k = `${m.product}:${m.name}`;
-                                    return (
-                                        <MetricRow
-                                            key={k}
-                                            metric={m}
-                                            value={productMetrics.values[k]}
-                                            history={productMetrics.history?.[k]}
-                                            lastUpdate={productMetrics.lastUpdate[k]}
-                                        />
-                                    );
-                                })}
-                            </Panel>
                         );
-                    })}
+                        if (listMetrics.length === 0) return null;
+                        // Cap visible buckets per panel so a single huge
+                        // distribution (kernel: 27+) doesn't push every
+                        // following panel off-screen. Scale lightly with
+                        // terminal height; lower bound keeps tiny panels
+                        // usable, upper bound keeps tall ones reasonable.
+                        const totalRows = stdout?.rows ?? 36;
+                        const maxRows = Math.max(
+                            3,
+                            Math.min(
+                                10,
+                                Math.floor((totalRows - 14) / listMetrics.length),
+                            ),
+                        );
+                        return listMetrics.map((m) => {
+                            const k = `${m.product}:${m.name}`;
+                            return (
+                                <DistributionPanel
+                                    key={k}
+                                    metric={m}
+                                    value={productMetrics.values[k]}
+                                    lastUpdate={productMetrics.lastUpdate[k]}
+                                    productInfo={productInfo}
+                                    activeMetricKey={metricFilter?.metricKey}
+                                    onBucketChange={onMetricFilterChange}
+                                    maxRows={maxRows}
+                                />
+                            );
+                        });
+                    })()}
             </Box>
         </Box>
     );
