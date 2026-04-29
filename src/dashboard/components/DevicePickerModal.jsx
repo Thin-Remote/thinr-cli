@@ -1,8 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { theme } from '../theme.js';
+import { useModal } from '../lib/focus.js';
 
 const PAGE = 12;
+
+const HINT = [
+    { k: '↑↓', label: 'move' },
+    { k: 'enter', label: 'pick' },
+    { k: 'esc', label: 'cancel' },
+];
 
 export function DevicePickerModal({ title, devices, onSelect, onCancel }) {
     const sorted = useMemo(() => {
@@ -34,34 +41,37 @@ export function DevicePickerModal({ title, devices, onSelect, onCancel }) {
     );
     const viewSlice = filtered.slice(viewStart, viewStart + PAGE);
 
-    useInput((input, key) => {
-        if (key.escape) {
-            onCancel?.();
-            return;
-        }
-        if (key.return) {
-            const pick = filtered[effectiveCursor];
-            if (pick) onSelect?.(pick);
-            return;
-        }
-        if (key.upArrow) {
-            setCursor((c) => Math.max(0, c - 1));
-            return;
-        }
-        if (key.downArrow) {
-            setCursor((c) => Math.min(filtered.length - 1, c + 1));
-            return;
-        }
-        if (key.backspace || key.delete) {
-            setFilter((f) => f.slice(0, -1));
-            setCursor(0);
-            return;
-        }
-        if (input && !key.ctrl && !key.meta && input.length === 1 && input >= ' ') {
-            setFilter((f) => f + input);
-            setCursor(0);
-        }
-    });
+    useModal(
+        (input, key) => {
+            if (key.escape) {
+                onCancel?.();
+                return;
+            }
+            if (key.return) {
+                const pick = filtered[effectiveCursor];
+                if (pick) onSelect?.(pick);
+                return;
+            }
+            if (key.upArrow) {
+                setCursor((c) => Math.max(0, c - 1));
+                return;
+            }
+            if (key.downArrow) {
+                setCursor((c) => Math.min(filtered.length - 1, c + 1));
+                return;
+            }
+            if (key.backspace || key.delete) {
+                setFilter((f) => f.slice(0, -1));
+                setCursor(0);
+                return;
+            }
+            if (input && !key.ctrl && !key.meta && input.length === 1 && input >= ' ') {
+                setFilter((f) => f + input);
+                setCursor(0);
+            }
+        },
+        { hint: HINT },
+    );
 
     return (
         <Box

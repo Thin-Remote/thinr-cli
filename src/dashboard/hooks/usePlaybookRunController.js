@@ -94,7 +94,18 @@ export function usePlaybookRunController() {
                             return { ...prev, stepsProgress: next };
                         });
                     },
-                    onStepEnd: ({ stepIndex, step, ok, summary, error, durationMs, verdict }) => {
+                    onStepEnd: ({
+                        stepIndex,
+                        step,
+                        ok,
+                        summary,
+                        error,
+                        durationMs,
+                        verdict,
+                        stdout,
+                        stderr,
+                        exitCode,
+                    }) => {
                         setState((prev) => {
                             if (prev.phase !== 'running' || prev.mode !== 'single') return prev;
                             const next = new Map(prev.stepsProgress);
@@ -106,6 +117,9 @@ export function usePlaybookRunController() {
                                 error,
                                 durationMs,
                                 verdict,
+                                stdout,
+                                stderr,
+                                exitCode,
                             });
                             return { ...prev, stepsProgress: next };
                         });

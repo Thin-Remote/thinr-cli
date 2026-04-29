@@ -1,0 +1,36 @@
+name: Linux host probe
+description: Sanity playbook for Linux devices — exercises stdout, stderr and a deliberate failure.
+
+target:
+    product: thinremote
+    concurrency: 5
+    continue_on_error: true
+
+steps:
+    - name: Hostname
+      action: exec
+      command: hostname
+
+    - name: Kernel
+      action: exec
+      command: uname -a
+
+    - name: Uptime
+      action: exec
+      command: uptime
+
+    - name: Disk usage
+      action: exec
+      command: df -h /
+
+    - name: Memory summary
+      action: exec
+      command: free -h
+
+    - name: Mixed stdout and stderr
+      action: exec
+      command: "echo 'hello from stdout' && echo 'this goes to stderr' 1>&2"
+
+    - name: Deliberate failure
+      action: exec
+      command: "ls /this/path/definitely/does/not/exist"

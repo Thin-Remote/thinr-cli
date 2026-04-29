@@ -8,17 +8,14 @@ import { deviceHealth, normalizeAgentVersion } from '../lib/status.js';
 
 const HISTORY_LEN = 40;
 
-// Rolling per-device history derived from the shared `samples` prop (which is
-// already pushed by the fleet WS hook). No polling happens here — we just
-// mirror the latest sample into local ring buffers for the sparklines.
 function useDeviceHistory(deviceId, sample) {
-    const historyRef = useRef({ cpu: [], mem: [], disk: [] });
+    const historyRef = useRef({ cpu: [], mem: [], swap: [], disk: [] });
     const lastDeviceRef = useRef(null);
     const [, setTick] = useState(0);
 
     useEffect(() => {
         if (lastDeviceRef.current !== deviceId) {
-            historyRef.current = { cpu: [], mem: [], disk: [] };
+            historyRef.current = { cpu: [], mem: [], swap: [], disk: [] };
             lastDeviceRef.current = deviceId;
             setTick((n) => n + 1);
         }
@@ -30,6 +27,7 @@ function useDeviceHistory(deviceId, sample) {
         historyRef.current = {
             cpu: push(historyRef.current.cpu, sample.cpu?.usage),
             mem: push(historyRef.current.mem, sample.memory?.usage),
+            swap: push(historyRef.current.swap, sample.memory?.swap?.usage),
             disk: push(historyRef.current.disk, sample.disk?.root?.usage),
         };
         setTick((n) => n + 1);
@@ -38,7 +36,6 @@ function useDeviceHistory(deviceId, sample) {
     return historyRef.current;
 }
 
-// journalctl --output=short: `Mon DD HH:MM:SS host unit[pid]: message`
 const JOURNAL_RE = /^(\w{3}\s+\d+\s+(\d{2}:\d{2}:\d{2}))\s+\S+\s+([^:]+):\s?(.*)$/;
 
 function parseLine(text) {
@@ -71,33 +68,28 @@ function fmtUp(secs) {
     return `${m}m`;
 }
 
-function MetricRow({ label, value, history, color }) {
-    const display = value == null ? '—' : `${Math.round(value)}%`;
+function MetricRow({ label, value, color, history, detail }) {
+    const valueColor = colorForPct(value);
+    const valueText = value == null ? '  —' : `${Math.round(value).toString().padStart(3)}%`;
     return (
         <Box>
-            <Box width={5}>
-                <Text color={theme.fgDim}>{label}</Text>
+            <Box width={6}>
+                <Text color={theme.fgFaint} bold>
+                    {label}
+                </Text>
             </Box>
-            <Bar value={value ?? 0} width={18} color={colorForPct(value)} />
+            <Box width={5} justifyContent="flex-end" marginRight={1}>
+                <Text color={valueColor} bold>
+                    {valueText}
+                </Text>
+            </Box>
+            <Bar value={value ?? 0} width={28} color={valueColor} />
             <Box marginLeft={1}>
-                <Sparkline series={history} width={14} color={color} />
+                <Sparkline series={history} width={20} color={color} />
             </Box>
-            <Box width={6} justifyContent="flex-end">
-                <Text color={theme.fg}>{display}</Text>
-            </Box>
-        </Box>
-    );
-}
-
-function KvRow({ k, children }) {
-    return (
-        <Box>
-            <Box width={11}>
-                <Text color={theme.fgDim}>{k}</Text>
-            </Box>
-            <Box flexGrow={1}>
-                <Text color={theme.fg} wrap="truncate-end">
-                    {children}
+            <Box marginLeft={2} flexGrow={1}>
+                <Text color={theme.fgDim} wrap="truncate-end">
+                    {detail || ''}
                 </Text>
             </Box>
         </Box>
@@ -123,9 +115,14 @@ function dotForHealth(h) {
     return { glyph: '○', color: theme.fgFaint };
 }
 
+function Sep() {
+    return <Text color={theme.fgFaint}>{'  ·  '}</Text>;
+}
+
 export function DeviceDetailPanel({
     device,
     sample,
+    alarmSeverity,
     paused,
     clearToken,
     focused,
@@ -147,7 +144,7 @@ export function DeviceDetailPanel({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [clearToken]);
 
-    const health = deviceHealth(device, latest);
+    const health = deviceHealth(device, alarmSeverity);
     const dot = dotForHealth(health);
     const memUsed =
         latest?.memory?.total != null && latest?.memory?.available != null
@@ -157,6 +154,11 @@ export function DeviceDetailPanel({
         memUsed != null && latest?.memory?.total != null
             ? `${fmtBytes(memUsed)} / ${fmtBytes(latest.memory.total)}`
             : null;
+    const swap = latest?.memory?.swap;
+    const hasSwap = swap && swap.total != null && swap.total > 0;
+    const swapDetail = hasSwap
+        ? `${fmtBytes(swap.total - (swap.free ?? 0))} / ${fmtBytes(swap.total)}`
+        : null;
     const diskDetail =
         latest?.disk?.root?.available != null && latest?.disk?.root?.total != null
             ? `${fmtBytes(latest.disk.root.total - latest.disk.root.available)} / ${fmtBytes(latest.disk.root.total)}`
@@ -164,18 +166,18 @@ export function DeviceDetailPanel({
     const load = latest?.load
         ? [latest.load['1m'], latest.load['5m'], latest.load['15m']]
               .map((v) => (v != null ? v.toFixed(2) : '—'))
-              .join(' · ')
+              .join(' / ')
         : null;
 
     const ip = device?.connection?.ip_address || null;
     const proto = device?.connection?.protocol || null;
     const agentV = normalizeAgentVersion(latest?.agent?.version) || '—';
-    const cores = latest?.cpu?.cores;
     const temp = latest?.cpu?.temperature;
-
-    // Logs visible rows: panel inside detail uses ~5 rows of chrome
-    // (border + title + actions + kvlist + spacing). Reserve the rest.
-    const logHeight = Math.max(4, Math.floor((stdout?.rows || 40) - 30));
+    // Chrome inside the panel: title (1) + identity (1) + meta+gap (2) +
+    // metrics rows (3 or 4 if swap) + actions+gap (2) + journal header+gap (2) +
+    // panel borders (2). Plus dashboard header+footer (2). Total ≈ 15 (+1 swap).
+    const chromeReserve = 15 + (hasSwap ? 1 : 0);
+    const logHeight = Math.max(4, (stdout?.rows || 40) - chromeReserve);
     const visibleLogs = lines.slice(-logHeight);
 
     const logStatusLabel = (() => {
@@ -197,6 +199,8 @@ export function DeviceDetailPanel({
         );
     }
 
+    const friendlyName = device.name || ip || null;
+
     return (
         <Panel
             title="DEVICE"
@@ -209,36 +213,73 @@ export function DeviceDetailPanel({
                 </Text>
             }
         >
-            {/* Header line */}
-            <Box marginBottom={1}>
+            {/* Identity line */}
+            <Box>
                 <Text color={dot.color}>{dot.glyph} </Text>
-                <Text color={theme.fg} bold>
+                <Text color={online ? theme.fg : theme.fgDim} bold>
                     {device.device}
                 </Text>
-                {device.name && (
-                    <Text color={theme.fgDim}>  {device.name}</Text>
+                {friendlyName && (
+                    <>
+                        <Sep />
+                        <Text color={theme.fgDim}>{friendlyName}</Text>
+                    </>
                 )}
             </Box>
 
-            {/* Metrics */}
-            <MetricRow
-                label="CPU"
-                value={latest?.cpu?.usage}
-                history={history.cpu}
-                color={theme.accent}
-            />
-            <MetricRow
-                label="MEM"
-                value={latest?.memory?.usage}
-                history={history.mem}
-                color={theme.magenta}
-            />
-            <MetricRow
-                label="DISK"
-                value={latest?.disk?.root?.usage}
-                history={history.disk}
-                color={theme.lime}
-            />
+            {/* Meta line */}
+            <Box marginBottom={1}>
+                <Text color={theme.fgFaint}>agent </Text>
+                <Text color={theme.fg}>{agentV}</Text>
+                <Sep />
+                <Text color={theme.fgFaint}>up </Text>
+                <Text color={theme.fg}>{fmtUp(latest?.uptime)}</Text>
+                {load && (
+                    <>
+                        <Sep />
+                        <Text color={theme.fgFaint}>load </Text>
+                        <Text color={theme.fg}>{load}</Text>
+                    </>
+                )}
+            </Box>
+
+            {/* Metrics, one row each, aligned in columns */}
+            <Box flexDirection="column">
+                <MetricRow
+                    label="CPU"
+                    value={latest?.cpu?.usage}
+                    history={history.cpu}
+                    color={theme.accent}
+                    detail={
+                        latest?.cpu?.cores != null
+                            ? `${latest.cpu.cores} core${latest.cpu.cores === 1 ? '' : 's'}${temp != null ? ` · ${temp.toFixed(1)}°C` : ''}`
+                            : ''
+                    }
+                />
+                <MetricRow
+                    label="MEM"
+                    value={latest?.memory?.usage}
+                    history={history.mem}
+                    color={theme.magenta}
+                    detail={memDetail || ''}
+                />
+                {hasSwap && (
+                    <MetricRow
+                        label="SWAP"
+                        value={swap.usage}
+                        history={history.swap}
+                        color={theme.amber}
+                        detail={swapDetail || ''}
+                    />
+                )}
+                <MetricRow
+                    label="DISK"
+                    value={latest?.disk?.root?.usage}
+                    history={history.disk}
+                    color={theme.lime}
+                    detail={diskDetail || ''}
+                />
+            </Box>
 
             {monError && !latest && (
                 <Box marginTop={1}>
@@ -250,22 +291,6 @@ export function DeviceDetailPanel({
                     <Text color={theme.fgDim}>waiting for monitoring sample…</Text>
                 </Box>
             )}
-
-            {/* Key/value */}
-            <Box marginTop={1} flexDirection="column">
-                <KvRow k="agent">{agentV}</KvRow>
-                <KvRow k="uptime">{fmtUp(latest?.uptime)}</KvRow>
-                {load && <KvRow k="load">{load}</KvRow>}
-                {memDetail && <KvRow k="memory">{memDetail}</KvRow>}
-                {diskDetail && <KvRow k="disk">{diskDetail}</KvRow>}
-                {(cores != null || temp != null) && (
-                    <KvRow k="cpu">
-                        {cores != null ? `${cores} cores` : ''}
-                        {cores != null && temp != null ? ' · ' : ''}
-                        {temp != null ? `${temp.toFixed(1)}°C` : ''}
-                    </KvRow>
-                )}
-            </Box>
 
             {/* Quick actions */}
             <Box marginTop={1}>
@@ -284,7 +309,7 @@ export function DeviceDetailPanel({
                 </Box>
                 <Text color={logStatusLabel.color}>● {logStatusLabel.text}</Text>
             </Box>
-            <Box flexDirection="column" flexGrow={1} marginTop={0}>
+            <Box flexDirection="column" flexGrow={1}>
                 {visibleLogs.length === 0 && online && !logError && (
                     <Text color={theme.fgFaint}>waiting for log stream…</Text>
                 )}

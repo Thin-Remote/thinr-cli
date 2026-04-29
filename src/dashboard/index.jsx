@@ -1,7 +1,12 @@
 import React from 'react';
 import { render } from 'ink';
 import { App } from './App.jsx';
-import { readConfig } from '../../lib/config.js';
+import {
+    readConfig,
+    listProfiles,
+    getActiveProfile,
+    setActiveProfile,
+} from '../../lib/config.js';
 import { connectToDeviceConsole } from '../../lib/console.js';
 
 const ENTER_ALT_SCREEN = '\x1b[?1049h';
@@ -13,8 +18,10 @@ const SHOW_CURSOR = '\x1b[?25h';
 const CLEAR_SCREEN = '\x1b[2J\x1b[3J\x1b[H';
 
 export async function run() {
-    const config = readConfig();
-    const server = config?.server || null;
+    let config = readConfig();
+    let server = config?.server || null;
+    let profile = getActiveProfile();
+    let profiles = listProfiles();
 
     let altScreenActive = false;
     const enterAlt = () => {
@@ -41,7 +48,12 @@ export async function run() {
             let action = null;
             enterAlt();
             const instance = render(
-                <App server={server} onAction={(a) => (action = a)} />,
+                <App
+                    server={server}
+                    profile={profile}
+                    profiles={profiles}
+                    onAction={(a) => (action = a)}
+                />,
                 { exitOnCtrlC: true },
             );
             await instance.waitUntilExit();
@@ -55,6 +67,15 @@ export async function run() {
                     process.stderr.write(`\nConsole error: ${err.message || err}\n`);
                     await new Promise((r) => setTimeout(r, 1500));
                 }
+                process.stdout.write(CLEAR_SCREEN);
+                continue;
+            }
+            if (action?.type === 'profile') {
+                setActiveProfile(action.name);
+                config = readConfig();
+                server = config?.server || null;
+                profile = getActiveProfile();
+                profiles = listProfiles();
                 process.stdout.write(CLEAR_SCREEN);
                 continue;
             }

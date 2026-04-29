@@ -27,7 +27,7 @@ function Tab({ label, keyHint, active }) {
     );
 }
 
-export function Header({ tab, onTab, counts, server }) {
+export function Header({ tab, onTab, counts, server, profile, multipleProfiles }) {
     const { total = 0, online = 0, warn = 0, bad = 0 } = counts || {};
     return (
         <Box
@@ -48,6 +48,20 @@ export function Header({ tab, onTab, counts, server }) {
                 ))}
             </Box>
             <Box gap={2}>
+                {profile && (
+                    <Text>
+                        <Text color={theme.fgFaint}>profile </Text>
+                        <Text color={theme.accent} bold>
+                            {profile}
+                        </Text>
+                        {multipleProfiles && tab === 'overview' && (
+                            <Text color={theme.fgFaint}>
+                                {' '}
+                                · <Text color={theme.magenta}>p</Text> switch
+                            </Text>
+                        )}
+                    </Text>
+                )}
                 {server && <Text color={theme.fgDim}>{server}</Text>}
                 <Text>
                     <Text color={theme.lime} bold>

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import { theme } from '../theme.js';
 import { Panel } from './Panel.jsx';
+import { Sparkline, colorForPct } from './Sparkline.jsx';
 import { deviceHealth } from '../lib/status.js';
 
 const SORT_OPTIONS = ['status', 'name', 'cpu', 'mem', 'disk', 'up'];
@@ -57,6 +58,8 @@ function HeaderCell({ label, sortKey, currentSort, width, align = 'left' }) {
 export function DevicesPanel({
     devices,
     samples,
+    cpuHistory,
+    alarmSeverityByDevice,
     loading,
     error,
     focused,
@@ -72,14 +75,14 @@ export function DevicesPanel({
             return {
                 d,
                 sample,
-                health: deviceHealth(d, sample),
+                health: deviceHealth(d, alarmSeverityByDevice?.get(d.device)),
                 cpu: sample?.cpu?.usage ?? null,
                 mem: sample?.memory?.usage ?? null,
                 disk: sample?.disk?.root?.usage ?? null,
                 up: uptimeSeconds(sample),
             };
         });
-    }, [devices, samples]);
+    }, [devices, samples, alarmSeverityByDevice]);
 
     const sorted = useMemo(() => {
         const order = { bad: 0, warn: 1, on: 2, off: 3 };
@@ -174,6 +177,10 @@ export function DevicesPanel({
             <Box>
                 <Box width={2} />
                 <HeaderCell label="name" sortKey="name" currentSort={sort} width={idWidth + 2} />
+                <Box width={2} />
+                <Box width={12} marginRight={1} paddingRight={2} justifyContent="flex-end">
+                    <Text color={theme.fgFaint}>30m</Text>
+                </Box>
                 <HeaderCell label="cpu" sortKey="cpu" currentSort={sort} width={5} align="right" />
                 <HeaderCell label="mem" sortKey="mem" currentSort={sort} width={5} align="right" />
                 <HeaderCell label="disk" sortKey="disk" currentSort={sort} width={5} align="right" />
@@ -192,6 +199,9 @@ export function DevicesPanel({
                     const isSel = e.d.device === selectedId;
                     const dot = dotFor(e.health);
                     const id = e.d.device.padEnd(idWidth);
+                    const cpuSeries = cpuHistory?.[e.d.device];
+                    const hasSpark = Array.isArray(cpuSeries) && cpuSeries.length >= 2;
+                    const sparkColor = e.cpu == null ? theme.fgDim : colorForPct(e.cpu);
                     return (
                         <Box key={e.d.device} backgroundColor={isSel ? '#1a2030' : undefined}>
                             <Box width={2}>
@@ -199,11 +209,18 @@ export function DevicesPanel({
                                     {isSel ? '›' : ' '}
                                 </Text>
                             </Box>
-                            <Box width={idWidth + 2}>
+                            <Box width={idWidth + 2} marginRight={2}>
                                 <Text wrap="truncate-end">
                                     <Text color={dot.color}>{dot.glyph}</Text>{' '}
                                     <Text color={isSel ? theme.fg : theme.fgDim}>{id}</Text>
                                 </Text>
+                            </Box>
+                            <Box width={12} marginRight={1}>
+                                {hasSpark ? (
+                                    <Sparkline series={cpuSeries} width={10} color={sparkColor} />
+                                ) : (
+                                    <Text color={theme.fgFaint}>{'·'.repeat(10)}</Text>
+                                )}
                             </Box>
                             <Box width={5} justifyContent="flex-end">
                                 {fmtNum(e.cpu, colorPct(e.cpu))}

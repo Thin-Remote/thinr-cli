@@ -1,9 +1,9 @@
-import React from 'react';
-import { Box, Text } from 'ink';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Box, Text, useInput } from 'ink';
 import { theme } from '../theme.js';
 import { Panel } from './Panel.jsx';
 
-function StepLine({ step }) {
+function StepLine({ step, selected, expanded, focused }) {
     const status = step.status;
     let glyph = '·';
     let color = theme.fgDim;
@@ -21,8 +21,13 @@ function StepLine({ step }) {
         Number.isFinite(step.durationMs) && step.status !== 'running'
             ? ` (${step.durationMs}ms)`
             : '';
+    const marker = selected ? (focused ? '▶' : '›') : ' ';
+    const expandTag = expanded ? ' ▾' : selectable(step) ? ' ▸' : '';
     return (
         <Box>
+            <Box width={2}>
+                <Text color={selected ? theme.accent : theme.fgFaint}>{marker}</Text>
+            </Box>
             <Box width={2}>
                 <Text color={color}>{glyph}</Text>
             </Box>
@@ -30,8 +35,9 @@ function StepLine({ step }) {
                 <Text color={theme.fgFaint}>{String(step.index + 1).padStart(2)}.</Text>
             </Box>
             <Box flexGrow={1}>
-                <Text color={theme.fg} wrap="truncate-end">
+                <Text color={selected ? theme.fg : theme.fg} bold={selected} wrap="truncate-end">
                     {step.name}
+                    {expandTag && <Text color={theme.fgFaint}>{expandTag}</Text>}
                 </Text>
             </Box>
             <Box>
@@ -44,24 +50,137 @@ function StepLine({ step }) {
     );
 }
 
-function SingleRunBody({ state }) {
-    const steps = state.phase === 'done'
-        ? (state.result?.steps || []).map((s) => ({
-              index: s.index,
-              name: s.name,
-              status: s.skipped ? 'skipped' : s.ok ? 'ok' : 'failed',
-              summary: s.summary,
-              durationMs: s.durationMs,
-          }))
-        : Array.from(state.stepsProgress?.values?.() || []).sort((a, b) => a.index - b.index);
+function selectable(step) {
+    return !!(step?.stdout || step?.stderr || step?.error);
+}
 
-    const header = state.phase === 'running' ? 'RUNNING' : state.result?.ok ? 'DONE · OK' : 'DONE · FAILED';
+function StepOutputView({ step, maxLines }) {
+    if (!step) return null;
+    const stdout = (step.stdout || '').replace(/\s+$/, '');
+    const stderr = (step.stderr || '').replace(/\s+$/, '');
+    const error = step.error;
+    const nothing = !stdout && !stderr && !error;
+    if (nothing) {
+        return (
+            <Box marginTop={1}>
+                <Text color={theme.fgFaint}>(no output captured for this step)</Text>
+            </Box>
+        );
+    }
+    const budget = Math.max(4, maxLines || 12);
+    const sections = [];
+    if (stderr) sections.push({ label: 'stderr', color: theme.red, text: stderr });
+    if (stdout) sections.push({ label: 'stdout', color: theme.fgDim, text: stdout });
+    if (error && !stderr && !stdout) {
+        sections.push({ label: 'error', color: theme.red, text: error });
+    }
+    const perSection = Math.max(2, Math.floor(budget / Math.max(1, sections.length)));
+    return (
+        <Box marginTop={1} flexDirection="column">
+            {sections.map((s, idx) => {
+                const lines = s.text.split('\n');
+                const tail = lines.slice(-perSection);
+                const dropped = lines.length - tail.length;
+                return (
+                    <Box key={idx} flexDirection="column" marginTop={idx === 0 ? 0 : 1}>
+                        <Text color={s.color}>── {s.label} ──</Text>
+                        {dropped > 0 && (
+                            <Text color={theme.fgFaint}>
+                                …{dropped} earlier line{dropped === 1 ? '' : 's'}
+                            </Text>
+                        )}
+                        {tail.map((ln, i) => (
+                            <Text key={i} color={theme.fg} wrap="wrap">
+                                {ln || ' '}
+                            </Text>
+                        ))}
+                    </Box>
+                );
+            })}
+        </Box>
+    );
+}
+
+function buildStepsForDone(state) {
+    return (state.result?.steps || []).map((s) => ({
+        index: s.index,
+        name: s.name,
+        status: s.skipped ? 'skipped' : s.ok ? 'ok' : 'failed',
+        summary: s.summary,
+        error: s.error,
+        durationMs: s.durationMs,
+        stdout: s.stdout,
+        stderr: s.stderr,
+        exitCode: s.exitCode,
+    }));
+}
+
+function SingleRunBody({ state, focused, onClose, maxOutputLines }) {
+    const steps = useMemo(() => {
+        if (state.phase === 'done') return buildStepsForDone(state);
+        return Array.from(state.stepsProgress?.values?.() || []).sort((a, b) => a.index - b.index);
+    }, [state]);
+
+    const isDone = state.phase === 'done';
+    const firstFailedIdx = useMemo(() => {
+        if (!isDone) return -1;
+        return steps.findIndex((s) => s.status === 'failed');
+    }, [steps, isDone]);
+
+    const [selectedIdx, setSelectedIdx] = useState(0);
+    const [expanded, setExpanded] = useState(false);
+
+    // Auto-select and auto-expand the first failed step the moment we
+    // transition to 'done'. Otherwise default to the last step so the
+    // user sees the most recent output.
+    useEffect(() => {
+        if (!isDone) return;
+        if (steps.length === 0) return;
+        if (firstFailedIdx >= 0) {
+            setSelectedIdx(firstFailedIdx);
+            setExpanded(true);
+        } else {
+            setSelectedIdx(steps.length - 1);
+            setExpanded(false);
+        }
+    }, [isDone, firstFailedIdx, steps.length]);
+
+    useInput(
+        (input, key) => {
+            if (!focused || !isDone) return;
+            if (key.escape) {
+                onClose?.();
+                return;
+            }
+            if (key.upArrow) {
+                setSelectedIdx((i) => Math.max(0, i - 1));
+                return;
+            }
+            if (key.downArrow) {
+                setSelectedIdx((i) => Math.min(steps.length - 1, i + 1));
+                return;
+            }
+            if (key.return || input === ' ') {
+                setExpanded((e) => !e);
+            }
+        },
+        { isActive: !!focused && isDone },
+    );
+
+    const header =
+        state.phase === 'running'
+            ? 'RUNNING'
+            : state.result?.ok
+              ? 'DONE · OK'
+              : 'DONE · FAILED';
     const headerColor =
         state.phase === 'running'
             ? theme.accent
             : state.result?.ok
               ? theme.lime
               : theme.red;
+
+    const selected = isDone ? steps[selectedIdx] : null;
 
     return (
         <Box flexDirection="column">
@@ -74,10 +193,28 @@ function SingleRunBody({ state }) {
                 </Text>
             </Box>
             {steps.length === 0 && <Text color={theme.fgFaint}>preparing...</Text>}
-            {steps.map((s) => <StepLine key={s.index} step={s} />)}
+            {steps.map((s, i) => (
+                <StepLine
+                    key={s.index}
+                    step={s}
+                    selected={isDone && i === selectedIdx}
+                    expanded={isDone && i === selectedIdx && expanded}
+                    focused={!!focused}
+                />
+            ))}
             {state.phase === 'done' && !state.result?.ok && state.result?.error && (
                 <Box marginTop={1}>
                     <Text color={theme.red}>{state.result.error}</Text>
+                </Box>
+            )}
+            {isDone && expanded && selected && (
+                <StepOutputView step={selected} maxLines={maxOutputLines} />
+            )}
+            {isDone && (
+                <Box marginTop={1}>
+                    <Text color={theme.fgFaint}>
+                        ↑↓ step · enter {expanded ? 'collapse' : 'expand'} · esc close
+                    </Text>
                 </Box>
             )}
         </Box>
@@ -200,7 +337,7 @@ function FleetRunBody({ state }) {
     );
 }
 
-export function PlaybookRunView({ state }) {
+export function PlaybookRunView({ state, focused, onClose, maxOutputLines }) {
     if (!state || state.phase === 'idle') {
         return (
             <Panel title="RUN" flexGrow={1}>
@@ -220,7 +357,12 @@ export function PlaybookRunView({ state }) {
             {state.mode === 'fleet' ? (
                 <FleetRunBody state={state} />
             ) : (
-                <SingleRunBody state={state} />
+                <SingleRunBody
+                    state={state}
+                    focused={focused}
+                    onClose={onClose}
+                    maxOutputLines={maxOutputLines}
+                />
             )}
         </Panel>
     );

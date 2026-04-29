@@ -24,9 +24,13 @@ const HISTORY = 30;
 const BUCKET = 'monitoring';
 const BASELINE_ITEMS = 500; // cap on devices returned in the one-shot snapshot.
 // Fields pulled on baseline. The server drops rows where any of these is
-// null, so keep to universal agent metrics — anything richer (temperature,
-// network rates, etc.) comes via the WS stream.
-const BASELINE_FIELDS = 'cpu.usage,memory.usage,disk.root.usage,uptime,agent.version';
+// null, so keep to universal agent metrics — anything platform-specific
+// (temperature, network rates, etc.) comes via the WS stream. Memory/disk
+// totals and cpu.cores are stable across all agents, so they live here so
+// the per-device detail tab has them on first paint instead of waiting up
+// to a minute for the next WS sample.
+const BASELINE_FIELDS =
+    'cpu.usage,cpu.cores,memory.usage,memory.total,memory.available,memory.swap.usage,memory.swap.total,memory.swap.free,disk.root.usage,disk.root.total,disk.root.available,uptime,agent.version';
 // Bound the baseline to recent samples. Without a time range the Mongo
 // `group_by=device` pipeline does a $sort over the whole bucket history
 // before $group/$first, which scales linearly with the number of fields

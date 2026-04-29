@@ -1,15 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getProductProperty } from '../../../lib/product.js';
 import { debugCount, debugLog } from '../../../lib/debug-log.js';
 import { eventStream } from '../../../lib/dashboard/event-stream.js';
 
-// Reads the `dashboard_metrics` property from a product and watches each
-// metric's resource across every device of the product via a persistent
-// websocket subscription to `device_resource_stream`. A one-shot REST
-// baseline runs at mount so the UI has a value before the first stream
-// frame arrives (the stream has no backfill).
+// Reads `dashboard_metrics` from each product present in the fleet and
+// watches their resources across every device of each product via a
+// persistent websocket subscription to `device_resource_stream`. The
+// stream has no backfill: panels render with placeholders until the
+// first frame for each metric arrives.
+//
+// Metrics from different products live in the same flat list. The
+// frontend keys per-metric state by `<product>:<name>` so two products
+// using the same metric name don't collide.
 
 const HISTORY_LEN = 32;
+
+function metricKey(productId, name) {
+    return `${productId}:${name}`;
+}
 
 function getPath(obj, dotted) {
     if (!dotted) return obj;
@@ -36,68 +44,88 @@ function aggregate(values, mode) {
     }
 }
 
-export function useProductMetrics(productId) {
+export function useProductMetrics(productIds) {
+    // Stable key so we can dep on the actual product set rather than the
+    // identity of the array passed in (callers tend to recompute).
+    const idsKey = useMemo(() => {
+        if (!Array.isArray(productIds)) return '';
+        return [...productIds].filter(Boolean).sort().join(',');
+    }, [productIds]);
+    const ids = useMemo(
+        () => (idsKey ? idsKey.split(',') : []),
+        [idsKey],
+    );
+
     const [metrics, setMetrics] = useState([]);
     const [values, setValues] = useState({});
     const [history, setHistory] = useState({});
     const [lastUpdate, setLastUpdate] = useState({});
     const [error, setError] = useState(null);
 
-    // Load the metric list once per product id. Treat "property missing"
-    // as an empty list so a fresh product doesn't fill the UI with an
-    // error banner.
+    // Load the metric list per product, in parallel, and concatenate.
+    // Each metric carries the `product` it came from so the live-stream
+    // effect can subscribe with the right filter and render-keys stay
+    // stable across products.
     useEffect(() => {
-        if (!productId) {
+        if (ids.length === 0) {
             setMetrics([]);
+            setError(null);
             return;
         }
         let cancelled = false;
         (async () => {
             const t0 = Date.now();
-            debugLog('http:metrics-list', 'start', { product: productId });
-            try {
-                const value = await getProductProperty(productId, 'dashboard_metrics');
-                debugLog('http:metrics-list', 'end', {
-                    duration_ms: Date.now() - t0,
-                    product: productId,
-                    metric_count: Array.isArray(value) ? value.length : Array.isArray(value?.metrics) ? value.metrics.length : 0,
-                });
-                if (cancelled) return;
-                const list = Array.isArray(value) ? value : Array.isArray(value?.metrics) ? value.metrics : [];
-                setMetrics(list);
-                setError(null);
-            } catch (e) {
-                debugLog('http:metrics-list', 'error', {
-                    duration_ms: Date.now() - t0,
-                    product: productId,
-                    error: e?.message || String(e),
-                });
-                if (cancelled) return;
-                if (/not found/i.test(e?.message || '')) {
-                    setMetrics([]);
-                    setError(null);
-                } else {
-                    setError(e?.message || String(e));
-                }
-            }
-        })();
+            debugLog('http:metrics-list', 'start', { products: ids });
+            const results = await Promise.all(
+                ids.map(async (productId) => {
+                    try {
+                        const value = await getProductProperty(productId, 'dashboard_metrics');
+                        const list = Array.isArray(value)
+                            ? value
+                            : Array.isArray(value?.metrics)
+                              ? value.metrics
+                              : [];
+                        return list.map((m) => ({ ...m, product: productId }));
+                    } catch (e) {
+                        if (/not found/i.test(e?.message || '')) return [];
+                        throw e;
+                    }
+                }),
+            );
+            if (cancelled) return;
+            const flat = results.flat();
+            debugLog('http:metrics-list', 'end', {
+                duration_ms: Date.now() - t0,
+                products: ids,
+                metric_count: flat.length,
+            });
+            setMetrics(flat);
+            setError(null);
+        })().catch((e) => {
+            debugLog('http:metrics-list', 'error', {
+                products: ids,
+                error: e?.message || String(e),
+            });
+            if (!cancelled) setError(e?.message || String(e));
+        });
         return () => {
             cancelled = true;
         };
-    }, [productId]);
+    }, [ids]);
 
     // Live stream via the shared event stream singleton. Subscribes to
-    // `device_resource_stream` once per distinct resource (filtered by
-    // product); the singleton handles connection, replay on reconnect,
-    // and dispatching frames whose `event` matches.
+    // `device_resource_stream` once per (product, resource) tuple; the
+    // singleton handles connection, replay on reconnect, and dispatching
+    // frames whose `event` matches.
     useEffect(() => {
-        if (!productId || metrics.length === 0) return;
+        if (metrics.length === 0) return;
 
-        let disposed = false;
-        // metric.name → { interval, field, aggregation, perDevice: {device: value} }
+        // key (product:name) → { interval, resource, field, aggregation, perDevice }
         const state = new Map();
         for (const metric of metrics) {
-            state.set(metric.name, {
+            const key = metricKey(metric.product, metric.name);
+            state.set(key, {
+                product: metric.product,
                 interval: Number(metric.interval) > 0 ? Number(metric.interval) : 0,
                 resource: metric.resource,
                 field: metric.field,
@@ -105,12 +133,13 @@ export function useProductMetrics(productId) {
                 perDevice: {},
             });
         }
-        // resource → [metric.name] so one incoming frame can update every
-        // metric derived from the same resource.
-        const byResource = new Map();
-        for (const [name, s] of state.entries()) {
-            if (!byResource.has(s.resource)) byResource.set(s.resource, []);
-            byResource.get(s.resource).push(name);
+        // (product, resource) → [key] so a single incoming frame updates
+        // every metric derived from the same resource within that product.
+        const byProductResource = new Map();
+        for (const [key, s] of state.entries()) {
+            const tupleKey = `${s.product}::${s.resource}`;
+            if (!byProductResource.has(tupleKey)) byProductResource.set(tupleKey, []);
+            byProductResource.get(tupleKey).push(key);
         }
 
         eventStream.connect();
@@ -121,38 +150,56 @@ export function useProductMetrics(productId) {
             }
             const resource = frame.resource;
             const device = frame.device;
+            const product = frame.product;
             const payload = frame.payload;
             if (!resource || !device || payload == null) {
                 debugCount('ws:metrics:dropped:missing-fields');
                 return;
             }
-            const names = byResource.get(resource);
-            if (!names) {
+            // Server-side filter routes frames per subscription, but the
+            // shared singleton multiplexes every product's subscription
+            // over the same socket — match the frame to the right metric
+            // bucket using `product` when the field is present, falling
+            // back to any tuple with the same resource so older frames
+            // without the field still update the right metrics (the
+            // resource name is unique per product in practice).
+            const tupleKey = product ? `${product}::${resource}` : null;
+            let keys = tupleKey ? byProductResource.get(tupleKey) : null;
+            if (!keys) {
+                for (const [tk, ks] of byProductResource.entries()) {
+                    if (tk.endsWith(`::${resource}`)) {
+                        keys = ks;
+                        break;
+                    }
+                }
+            }
+            if (!keys) {
                 debugCount('ws:metrics:dropped:unknown-resource');
                 return;
             }
             debugCount(`ws:metrics:ok:${resource}`);
-            for (const name of names) {
-                const s = state.get(name);
+            for (const key of keys) {
+                const s = state.get(key);
                 const v = getPath(payload, s.field);
                 s.perDevice[device] = v;
                 const agg = aggregate(Object.values(s.perDevice), s.aggregation);
-                setValues((cur) => ({ ...cur, [name]: agg }));
+                setValues((cur) => ({ ...cur, [key]: agg }));
                 setHistory((cur) => ({
                     ...cur,
-                    [name]: [...(cur[name] || []), agg].slice(-HISTORY_LEN),
+                    [key]: [...(cur[key] || []), agg].slice(-HISTORY_LEN),
                 }));
-                setLastUpdate((cur) => ({ ...cur, [name]: Date.now() }));
+                setLastUpdate((cur) => ({ ...cur, [key]: Date.now() }));
             }
         });
 
-        for (const [resource, names] of byResource.entries()) {
-            const positives = names
-                .map((n) => state.get(n).interval)
+        for (const [tupleKey, keys] of byProductResource.entries()) {
+            const [product, resource] = tupleKey.split('::');
+            const positives = keys
+                .map((k) => state.get(k).interval)
                 .filter((v) => v > 0);
             const msg = {
                 event: 'device_resource_stream',
-                filters: { product: productId, resource },
+                filters: { product, resource },
             };
             if (positives.length > 0) {
                 msg.params = { interval: Math.min(...positives) * 1000 };
@@ -160,20 +207,11 @@ export function useProductMetrics(productId) {
             eventStream.subscribe(msg);
         }
 
-        // No REST baseline: the previous implementation made one IOTMP
-        // call per device per metric (~200 calls for 99 devices × 2
-        // metrics, ~10s wallclock and a real CPU spike on the backend),
-        // just to show values a few seconds earlier. The WS stream
-        // already pushes values for every device within the configured
-        // interval, so we let the panel render with placeholders until
-        // frames arrive.
-
         return () => {
-            disposed = true;
             offFrame();
             eventStream.disconnect();
         };
-    }, [productId, metrics]);
+    }, [metrics]);
 
     return { metrics, values, history, lastUpdate, error };
 }

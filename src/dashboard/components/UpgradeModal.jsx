@@ -1,31 +1,43 @@
 import React, { useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { theme } from '../theme.js';
+import { useModal } from '../lib/focus.js';
 
 const MIN_BATCH = 1;
 const MAX_BATCH = 20;
+
+const HINT = [
+    { k: 'c', label: 'canary' },
+    { k: 'f', label: 'abort on fail' },
+    { k: '+/-', label: 'batch' },
+    { k: 'enter', label: 'start' },
+    { k: 'esc', label: 'cancel' },
+];
 
 export function UpgradeModal({ outdatedCount, target, onConfirm, onCancel }) {
     const [canary, setCanary] = useState(true);
     const [abortOnFailure, setAbortOnFailure] = useState(true);
     const [batchSize, setBatchSize] = useState(5);
 
-    useInput((input, key) => {
-        if (key.escape) {
-            onCancel?.();
-            return;
-        }
-        if (key.return) {
-            onConfirm?.({ canary, abortOnFailure, batchSize });
-            return;
-        }
-        if (input === 'c') setCanary((v) => !v);
-        else if (input === 'f') setAbortOnFailure((v) => !v);
-        else if (input === '+' || input === '=')
-            setBatchSize((n) => Math.min(MAX_BATCH, n + 1));
-        else if (input === '-' || input === '_')
-            setBatchSize((n) => Math.max(MIN_BATCH, n - 1));
-    });
+    useModal(
+        (input, key) => {
+            if (key.escape) {
+                onCancel?.();
+                return;
+            }
+            if (key.return) {
+                onConfirm?.({ canary, abortOnFailure, batchSize });
+                return;
+            }
+            if (input === 'c') setCanary((v) => !v);
+            else if (input === 'f') setAbortOnFailure((v) => !v);
+            else if (input === '+' || input === '=')
+                setBatchSize((n) => Math.min(MAX_BATCH, n + 1));
+            else if (input === '-' || input === '_')
+                setBatchSize((n) => Math.max(MIN_BATCH, n - 1));
+        },
+        { hint: HINT },
+    );
 
     const check = (on) => (on ? <Text color={theme.lime}>[x]</Text> : <Text color={theme.fgDim}>[ ]</Text>);
 

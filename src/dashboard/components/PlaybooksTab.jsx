@@ -290,7 +290,7 @@ export function PlaybooksTab({
                 setDevicePicker({ mode: 'test' });
                 return;
             }
-            if (input === 'f') {
+            if (input === 'a') {
                 if (!detail?.parsed) {
                     setNotice('Playbook YAML not ready — open it first.');
                     return;
@@ -326,18 +326,12 @@ export function PlaybooksTab({
         { isActive: focused && runPhase === 'running' },
     );
 
-    // Done-phase input (dismiss). Any key dismisses — the user is only
-    // waiting to close the view, not typing, so being permissive avoids
-    // leaving them stuck if they hit something other than esc/return.
-    useInput(
-        (input, key) => {
-            if (runPhase !== 'done') return;
-            run.dismissDone();
-            refresh();
-            if (selected) loadReports(selected.name);
-        },
-        { isActive: focused && runPhase === 'done' },
-    );
+    const handleRunDoneClose = () => {
+        if (runPhase !== 'done') return;
+        run.dismissDone();
+        refresh();
+        if (selected) loadReports(selected.name);
+    };
 
     const selectedReport = reports[reportIdx] || null;
 
@@ -346,9 +340,13 @@ export function PlaybooksTab({
     const right = (
         <Box>
             {productOptions.length > 1 && (
-                <Text color={theme.fgFaint}>
-                    {productIdx + 1}/{productOptions.length}  (p)
-                </Text>
+                <>
+                    <Text color={theme.fgFaint}>
+                        {productIdx + 1}/{productOptions.length}{'  '}
+                    </Text>
+                    <Text color={theme.magenta}>p</Text>
+                    <Text color={theme.fgDim}> product</Text>
+                </>
             )}
         </Box>
     );
@@ -398,7 +396,12 @@ export function PlaybooksTab({
 
             <Box width="44%" flexDirection="column">
                 {runPhase === 'running' || runPhase === 'done' ? (
-                    <PlaybookRunView state={run.state} />
+                    <PlaybookRunView
+                        state={run.state}
+                        focused={focused}
+                        onClose={handleRunDoneClose}
+                        maxOutputLines={Math.max(6, rows - 18)}
+                    />
                 ) : (
                     <Panel
                         title="YAML"
@@ -408,8 +411,8 @@ export function PlaybooksTab({
                             <Box>
                                 <Text color={theme.magenta}>t</Text>
                                 <Text color={theme.fgDim}> test  </Text>
-                                <Text color={theme.magenta}>f</Text>
-                                <Text color={theme.fgDim}> fleet  </Text>
+                                <Text color={theme.magenta}>a</Text>
+                                <Text color={theme.fgDim}> apply  </Text>
                                 <Text color={theme.magenta}>x</Text>
                                 <Text color={theme.fgDim}> del</Text>
                             </Box>

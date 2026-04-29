@@ -1,17 +1,43 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../theme.js';
 import { Panel } from './Panel.jsx';
 import { Sparkline } from './Sparkline.jsx';
 import { Bar, colorForPct } from './Sparkline.jsx';
+import { DevicesPanel } from './DevicesPanel.jsx';
 import {
-    deviceHealth,
     fleetCounts,
-    activeAlerts,
     agentVersionCounts,
     compareAgentVersions,
     deviceKindCounts,
+    UNASSIGNED_PRODUCT_KEY,
 } from '../lib/status.js';
+import { ALARM_SEVERITY, ALARM_STATE } from '../../../lib/alarms.js';
+import { useFocusable, useTabCycle } from '../lib/focus.js';
+
+const FLEET_HINT = [
+    { k: '1-5', label: 'tabs' },
+    { k: 'tab', label: 'panel' },
+    { k: '↑↓', label: 'nav' },
+    { k: 's', label: 'sort' },
+    { k: '/', label: 'filter' },
+    { k: 'enter', label: 'detail' },
+    { k: 'q', label: 'quit' },
+];
+
+const ALERTS_HINT = [
+    { k: '1-5', label: 'tabs' },
+    { k: 'tab', label: 'panel' },
+    { k: 'v', label: 'view' },
+    { k: 'q', label: 'quit' },
+];
+
+const VERSIONS_HINT = [
+    { k: '1-5', label: 'tabs' },
+    { k: 'tab', label: 'panel' },
+    { k: 'u', label: 'upgrade' },
+    { k: 'q', label: 'quit' },
+];
 
 function Kpi({ label, value, color = theme.fg, suffix }) {
     return (
@@ -45,54 +71,6 @@ function MiniMetric({ label, value, history, color }) {
     );
 }
 
-function statusDot(h) {
-    if (h === 'on') return { glyph: '●', color: theme.lime };
-    if (h === 'warn') return { glyph: '▲', color: theme.amber };
-    if (h === 'bad') return { glyph: '✕', color: theme.red };
-    return { glyph: '○', color: theme.fgFaint };
-}
-
-function FleetListRow({ device, sample, health, cpuSeries }) {
-    const dot = statusDot(health);
-    const cpu = sample?.cpu?.usage;
-    const mem = sample?.memory?.usage;
-    const cpuStr = cpu == null ? '  —' : `${Math.round(cpu).toString().padStart(3)}%`;
-    const memStr = mem == null ? '  —' : `${Math.round(mem).toString().padStart(3)}%`;
-    const sparkColor = cpu == null ? theme.fgDim : colorForPct(cpu);
-    const hasSpark = Array.isArray(cpuSeries) && cpuSeries.length >= 2;
-    return (
-        <Box>
-            <Box width={2}>
-                <Text color={dot.color}>{dot.glyph}</Text>
-            </Box>
-            <Box flexGrow={1} flexBasis={0} flexShrink={1} minWidth={0}>
-                <Text color={theme.fg} wrap="truncate-end">
-                    {device.device}
-                </Text>
-            </Box>
-            <Box width={12} marginRight={1}>
-                {hasSpark ? (
-                    <Sparkline series={cpuSeries} width={10} color={sparkColor} />
-                ) : (
-                    <Text color={theme.fgFaint}>{'·'.repeat(10)}</Text>
-                )}
-            </Box>
-            <Box width={5} marginRight={2} justifyContent="flex-end">
-                <Text color={cpu == null ? theme.fgFaint : colorForPct(cpu)}>{cpuStr}</Text>
-            </Box>
-            <Box width={4}>
-                <Text color={theme.fgFaint}>cpu</Text>
-            </Box>
-            <Box width={5} marginRight={1} justifyContent="flex-end">
-                <Text color={mem == null ? theme.fgFaint : colorForPct(mem)}>{memStr}</Text>
-            </Box>
-            <Box width={4}>
-                <Text color={theme.fgFaint}>mem</Text>
-            </Box>
-        </Box>
-    );
-}
-
 function VersionBar({ v, count, max, level }) {
     const width = 16;
     const filled = Math.max(1, Math.round((count / max) * width));
@@ -116,20 +94,171 @@ function VersionBar({ v, count, max, level }) {
     );
 }
 
-function AlertRow({ a }) {
-    const color = a.sev === 'crit' ? theme.red : a.sev === 'warn' ? theme.amber : theme.accent;
-    const sev = a.sev === 'crit' ? '●' : a.sev === 'warn' ? '▲' : 'i';
+function severityVisual(sev) {
+    if (sev === ALARM_SEVERITY.CRITICAL || sev === ALARM_SEVERITY.HIGH) {
+        return { color: theme.red, glyph: '●' };
+    }
+    if (sev === ALARM_SEVERITY.MEDIUM) return { color: theme.amber, glyph: '▲' };
+    if (sev === ALARM_SEVERITY.LOW) return { color: theme.accent, glyph: 'i' };
+    return { color: theme.fgDim, glyph: '·' };
+}
+
+function AlarmGroupRow({ group, now }) {
+    const { color, glyph } = severityVisual(group.severity);
+    return (
+        <Box flexDirection="column" marginBottom={1}>
+            <Box>
+                <Box width={2}>
+                    <Text color={color} bold>
+                        {glyph}
+                    </Text>
+                </Box>
+                <Box width={3} justifyContent="flex-end" marginRight={1}>
+                    <Text color={theme.fg} bold>
+                        {group.count}
+                    </Text>
+                </Box>
+                <Text color={theme.fg}>{group.name}</Text>
+            </Box>
+            <Box marginLeft={6} flexDirection="column">
+                {group.devices.map((d, i) => {
+                    const tag = stateLabel(d.state);
+                    const since =
+                        d.initiated != null ? durationLabel(now - d.initiated) : '—';
+                    return (
+                        <Box key={`${d.name}-${i}`}>
+                            <Box flexGrow={1} flexBasis={0} minWidth={0}>
+                                <Text color={theme.fgDim} wrap="truncate-end">
+                                    {d.name}
+                                </Text>
+                            </Box>
+                            <Box width={6} justifyContent="flex-end" marginLeft={1}>
+                                <Text color={d.value ? theme.fg : theme.fgFaint}>
+                                    {d.value || '—'}
+                                </Text>
+                            </Box>
+                            <Box width={5} justifyContent="flex-end" marginLeft={1}>
+                                <Text color={theme.fgDim}>{since}</Text>
+                            </Box>
+                            <Box width={6} justifyContent="flex-end" marginLeft={1}>
+                                <Text color={stateColor(d.state)}>{tag}</Text>
+                            </Box>
+                        </Box>
+                    );
+                })}
+            </Box>
+        </Box>
+    );
+}
+
+function durationLabel(ms) {
+    if (!Number.isFinite(ms) || ms < 0) return '—';
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h`;
+    const d = Math.floor(h / 24);
+    return `${d}d`;
+}
+
+function activationMs(inst) {
+    const v = inst?.activation?.initiated;
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string') {
+        const t = Date.parse(v);
+        return Number.isFinite(t) ? t : null;
+    }
+    if (v && typeof v === 'object' && v.$date != null) {
+        if (typeof v.$date === 'number') return v.$date;
+        const t = Date.parse(v.$date);
+        return Number.isFinite(t) ? t : null;
+    }
+    return null;
+}
+
+function stateTag(state) {
+    if (state === ALARM_STATE.ACKNOWLEDGED) return 'ACK';
+    if (state === ALARM_STATE.LATCHED) return 'LATCH';
+    if (state === ALARM_STATE.SHELVED) return 'SHELV';
+    return null;
+}
+
+function stateLabel(state) {
+    if (state === ALARM_STATE.NONE) return 'PEND';
+    if (state === ALARM_STATE.ACTIVATED) return 'ACTIVE';
+    if (state === ALARM_STATE.CLEARED) return 'CLEAR';
+    return stateTag(state) || '';
+}
+
+function stateColor(state) {
+    if (state === ALARM_STATE.ACTIVATED) return theme.red;
+    if (
+        state === ALARM_STATE.ACKNOWLEDGED ||
+        state === ALARM_STATE.LATCHED ||
+        state === ALARM_STATE.SHELVED
+    ) {
+        return theme.amber;
+    }
+    return theme.fgDim;
+}
+
+// Pulls a compact display value from `evaluation.last_values`. The map
+// usually has a single key (the field that drove the alarm rule). Numbers
+// in the 0..100 range render as percentages — that's how every default
+// monitoring rule (cpu/mem/disk/swap usage) is parameterised.
+function evaluationValue(inst) {
+    const lv = inst?.evaluation?.last_values;
+    if (!lv || typeof lv !== 'object') return null;
+    const keys = Object.keys(lv);
+    if (keys.length === 0) return null;
+    const raw = lv[keys[0]];
+    if (raw == null) return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return String(raw);
+    if (n >= 0 && n <= 100) return `${Math.round(n)}%`;
+    if (Math.abs(n) >= 1000) return n.toFixed(0);
+    if (Math.abs(n) >= 10) return n.toFixed(1);
+    return n.toFixed(2);
+}
+
+function AlarmInstanceRow({ inst, hostWidth, now }) {
+    const { color, glyph } = severityVisual(inst.severity);
+    const dev = inst.origin?.name || inst.origin?.id || '—';
+    const label = inst.name || inst.alarm?.rule || 'alarm';
+    const initiated = activationMs(inst);
+    const since = initiated != null ? durationLabel(now - initiated) : '—';
+    const value = evaluationValue(inst);
+    const stTag = stateLabel(inst.state);
     return (
         <Box>
             <Box width={2}>
                 <Text color={color} bold>
-                    {sev}
+                    {glyph}
                 </Text>
             </Box>
-            <Text wrap="truncate-end">
-                <Text color={theme.fg}>{a.dev}</Text>
-                <Text color={theme.fgDim}> · {a.msg}</Text>
-            </Text>
+            <Box width={hostWidth + 2}>
+                <Text color={theme.fg} wrap="truncate-end">
+                    {dev}
+                </Text>
+            </Box>
+            <Box flexGrow={1} flexBasis={0} minWidth={0}>
+                <Text color={theme.fgDim} wrap="truncate-end">
+                    {label}
+                </Text>
+            </Box>
+            <Box width={6} justifyContent="flex-end" marginLeft={1}>
+                <Text color={value ? theme.fg : theme.fgFaint}>
+                    {value || '—'}
+                </Text>
+            </Box>
+            <Box width={5} justifyContent="flex-end" marginLeft={1}>
+                <Text color={theme.fgDim}>{since}</Text>
+            </Box>
+            <Box width={6} justifyContent="flex-end" marginLeft={1}>
+                <Text color={stateColor(inst.state)}>{stTag}</Text>
+            </Box>
         </Box>
     );
 }
@@ -166,6 +295,16 @@ function EventRow({ e, isFirst }) {
             </Text>
         </Box>
     );
+}
+
+function groupMetricsByProduct(metrics) {
+    const map = new Map();
+    for (const m of metrics) {
+        const key = m.product || '';
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(m);
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 }
 
 function formatMetricValue(v, unit) {
@@ -221,25 +360,133 @@ export function OverviewTab({
     history,
     cpuHistory,
     events,
+    alarms,
+    alarmSeverityByDevice,
     productMetrics,
+    productInfo,
     latestAgentVersion,
     outdatedCount,
     upgradeState,
+    selectedId,
+    onSelectDevice,
+    sort,
+    onCycleSort,
+    filter,
+    filtering,
+    onStartFilter,
+    onConfirmDevice,
+    onRequestUpgrade,
+    devicesLoading,
+    devicesError,
 }) {
-    const counts = useMemo(() => fleetCounts(devices, samples), [devices, samples]);
-    const alerts = useMemo(() => activeAlerts(devices, samples), [devices, samples]);
+    useTabCycle('overview');
+
+    // Two views over the same alarm list: 'rule' collapses to one row per
+    // alarm rule (better for triage), 'instance' shows one row per device
+    // (better when you want to spot a specific machine quickly).
+    const [alarmView, setAlarmView] = useState('rule');
+
+    const fleet = useFocusable({
+        id: 'overview-fleet',
+        parent: 'overview',
+        hint: FLEET_HINT,
+        handlers: (input, key) => {
+            if (input === '/') return onStartFilter?.();
+            if (input === 's') return onCycleSort?.();
+            if (key.return && selectedId) return onConfirmDevice?.();
+        },
+    });
+    const alertsHasInstances = (alarms?.instances?.length || 0) > 0;
+    const alertsPanel = useFocusable({
+        id: 'overview-alerts',
+        parent: 'overview',
+        hint: ALERTS_HINT,
+        handlers: (input) => {
+            if (input === 'v' && alertsHasInstances) {
+                setAlarmView((v) => (v === 'rule' ? 'instance' : 'rule'));
+            }
+        },
+    });
+    const versionsPanel = useFocusable({
+        id: 'overview-versions',
+        parent: 'overview',
+        hint: VERSIONS_HINT,
+        handlers: (input) => {
+            if (input === 'u') onRequestUpgrade?.();
+        },
+    });
+    const counts = useMemo(
+        () => fleetCounts(devices, alarmSeverityByDevice),
+        [devices, alarmSeverityByDevice],
+    );
+    const alarmInstances = alarms?.instances ?? [];
+    const alarmCounts = useMemo(() => {
+        const out = { crit: 0, high: 0, med: 0, low: 0 };
+        for (const i of alarmInstances) {
+            if (i.severity === ALARM_SEVERITY.CRITICAL) out.crit++;
+            else if (i.severity === ALARM_SEVERITY.HIGH) out.high++;
+            else if (i.severity === ALARM_SEVERITY.MEDIUM) out.med++;
+            else out.low++;
+        }
+        return out;
+    }, [alarmInstances]);
+    const alarmStateCounts = useMemo(() => {
+        const out = { active: 0, ack: 0, latched: 0, shelved: 0 };
+        for (const i of alarmInstances) {
+            if (i.state === ALARM_STATE.ACKNOWLEDGED) out.ack++;
+            else if (i.state === ALARM_STATE.LATCHED) out.latched++;
+            else if (i.state === ALARM_STATE.SHELVED) out.shelved++;
+            else out.active++;
+        }
+        return out;
+    }, [alarmInstances]);
+    // Group active instances by rule name. Each group lists which devices
+    // are firing — easier to scan "5 boxes hit High Memory" than reading
+    // the same rule name down 5 rows. Each device entry carries the value
+    // and state so the row renders parity with the instance view.
+    const alarmGroups = useMemo(() => {
+        const groups = new Map();
+        for (const i of alarmInstances) {
+            const key = i.name || i.alarm?.rule || 'alarm';
+            const dev = {
+                name: i.origin?.name || i.origin?.id || '—',
+                value: evaluationValue(i),
+                state: i.state,
+                initiated: activationMs(i),
+            };
+            const sev = i.severity ?? ALARM_SEVERITY.NONE;
+            const cur = groups.get(key);
+            if (cur) {
+                cur.count += 1;
+                cur.devices.push(dev);
+                if (sev > cur.severity) cur.severity = sev;
+            } else {
+                groups.set(key, { name: key, count: 1, severity: sev, devices: [dev] });
+            }
+        }
+        return [...groups.values()].sort((a, b) => {
+            if (a.severity !== b.severity) return b.severity - a.severity;
+            return b.count - a.count;
+        });
+    }, [alarmInstances]);
     const versions = useMemo(() => agentVersionCounts(devices, samples), [devices, samples]);
     const kinds = useMemo(() => deviceKindCounts(devices), [devices]);
-    const sortedFleet = useMemo(() => {
-        const order = { bad: 0, warn: 1, on: 2, off: 3 };
-        return [...devices].sort((a, b) => {
-            const ha = deviceHealth(a, samples?.[a.device]);
-            const hb = deviceHealth(b, samples?.[b.device]);
-            const oo = order[ha] - order[hb];
-            if (oo !== 0) return oo;
-            return a.device.localeCompare(b.device);
-        });
-    }, [devices, samples]);
+    // Pre-compute the widest hostname across instances so the rule column
+    // aligns. Capped to keep the rule column from being squeezed when one
+    // device has a runaway hostname.
+    const alarmHostWidth = useMemo(
+        () =>
+            Math.min(
+                32,
+                alarmInstances.reduce(
+                    (w, i) =>
+                        Math.max(w, (i.origin?.name || i.origin?.id || '').length),
+                    14,
+                ),
+            ),
+        [alarmInstances],
+    );
+    const nowTs = Date.now();
 
     const lastCpu = history.cpu?.at?.(-1);
     const lastMem = history.mem?.at?.(-1);
@@ -306,104 +553,171 @@ export function OverviewTab({
                         <MiniMetric label="DISK" value={lastDisk} history={history.disk} color={theme.lime} />
                     </Box>
                     {kinds.length > 0 && (
-                        <Box marginTop={1} flexWrap="wrap">
-                            {kinds.slice(0, 6).map(([k, c]) => (
-                                <Box key={k} marginRight={2}>
-                                    <Text color={theme.fgDim}>{k} </Text>
-                                    <Text color={theme.accent} bold>
-                                        {c}
-                                    </Text>
-                                </Box>
-                            ))}
+                        <Box marginTop={1} flexDirection="column">
+                            {kinds.slice(0, 8).map(([k, c]) => {
+                                const isUnassigned = k === UNASSIGNED_PRODUCT_KEY;
+                                const label = isUnassigned
+                                    ? 'no product'
+                                    : productInfo?.[k]?.name || k;
+                                return (
+                                    <Box key={k}>
+                                        <Box flexGrow={1} flexBasis={0} minWidth={0}>
+                                            <Text
+                                                color={
+                                                    isUnassigned ? theme.fgFaint : theme.fgDim
+                                                }
+                                                wrap="truncate-end"
+                                                italic={isUnassigned}
+                                            >
+                                                {label}
+                                            </Text>
+                                        </Box>
+                                        <Box width={6} justifyContent="flex-end">
+                                            <Text
+                                                color={
+                                                    isUnassigned ? theme.fgDim : theme.accent
+                                                }
+                                                bold={!isUnassigned}
+                                            >
+                                                {c}
+                                            </Text>
+                                        </Box>
+                                    </Box>
+                                );
+                            })}
                         </Box>
                     )}
                 </Panel>
-                {productMetrics?.metrics?.length > 0 && (
-                    <Panel
-                        title="CUSTOM METRICS"
-                        sub={`${productMetrics.metrics.length}`}
-                        right={
-                            productMetrics.error ? (
-                                <Text color={theme.red}>err</Text>
-                            ) : (
-                                <Text color={theme.fgFaint}>product</Text>
-                            )
-                        }
-                        flexGrow={0}
-                        flexShrink={0}
-                    >
-                        {productMetrics.metrics.map((m) => (
-                            <MetricRow
-                                key={m.name}
-                                metric={m}
-                                value={productMetrics.values[m.name]}
-                                history={productMetrics.history?.[m.name]}
-                                lastUpdate={productMetrics.lastUpdate[m.name]}
-                            />
-                        ))}
-                    </Panel>
-                )}
+                {productMetrics?.metrics?.length > 0 &&
+                    groupMetricsByProduct(productMetrics.metrics).map(
+                        ([product, list]) => {
+                            const display =
+                                productInfo?.[product]?.name || product || 'metrics';
+                            return (
+                                <Panel
+                                    key={product}
+                                    title={display.toUpperCase()}
+                                    sub={`${list.length}`}
+                                    right={
+                                        productMetrics.error ? (
+                                            <Text color={theme.red}>err</Text>
+                                        ) : (
+                                            <Text color={theme.fgFaint}>{product}</Text>
+                                        )
+                                    }
+                                    flexGrow={0}
+                                    flexShrink={0}
+                                >
+                                    {list.map((m) => {
+                                        const k = `${m.product}:${m.name}`;
+                                        return (
+                                            <MetricRow
+                                                key={k}
+                                                metric={m}
+                                                value={productMetrics.values[k]}
+                                                history={productMetrics.history?.[k]}
+                                                lastUpdate={productMetrics.lastUpdate[k]}
+                                            />
+                                        );
+                                    })}
+                                </Panel>
+                            );
+                        },
+                    )}
                 <Panel
                     title="ACTIVE ALERTS"
-                    sub={`${alerts.length}`}
+                    sub={alarmInstances.length > 0 ? `${alarmInstances.length}` : null}
+                    focused={alertsPanel.focused}
                     right={
-                        alerts.length > 0 ? (
-                            <Text color={theme.red}>
-                                {alerts.filter((a) => a.sev === 'crit').length} crit ·{' '}
-                                {alerts.filter((a) => a.sev === 'warn').length} warn
+                        alarmInstances.length > 0 ? (
+                            <Text>
+                                {alarmStateCounts.ack +
+                                    alarmStateCounts.latched +
+                                    alarmStateCounts.shelved >
+                                    0 && (
+                                    <Text color={theme.fgFaint}>
+                                        {alarmStateCounts.ack > 0 &&
+                                            `${alarmStateCounts.ack} ack `}
+                                        {alarmStateCounts.latched > 0 &&
+                                            `${alarmStateCounts.latched} latched `}
+                                        {alarmStateCounts.shelved > 0 &&
+                                            `${alarmStateCounts.shelved} shelved `}
+                                        <Text color={theme.fgFaint}>· </Text>
+                                    </Text>
+                                )}
+                                <Text color={theme.fgFaint}>v </Text>
+                                <Text color={theme.accent}>{alarmView}</Text>
                             </Text>
                         ) : null
                     }
                 >
-                    {alerts.length === 0 && <Text color={theme.fgFaint}>no active alerts</Text>}
-                    {alerts.map((a, i) => (
-                        <AlertRow key={i} a={a} />
-                    ))}
+                    {alarms?.error && (
+                        <Text color={theme.red} wrap="truncate-end">
+                            {alarms.error?.message || 'failed to load alarms'}
+                        </Text>
+                    )}
+                    {!alarms?.error && alarmInstances.length === 0 && (
+                        <Text color={theme.fgFaint}>
+                            {alarms?.loading ? 'loading alarms…' : 'no active alerts'}
+                        </Text>
+                    )}
+                    {alarmInstances.length > 0 && (
+                        <>
+                            <Box flexDirection="row" marginBottom={1}>
+                                <Kpi
+                                    label="CRIT"
+                                    value={alarmCounts.crit}
+                                    color={alarmCounts.crit ? theme.red : theme.fgDim}
+                                />
+                                <Kpi
+                                    label="HIGH"
+                                    value={alarmCounts.high}
+                                    color={alarmCounts.high ? theme.red : theme.fgDim}
+                                />
+                                <Kpi
+                                    label="MED"
+                                    value={alarmCounts.med}
+                                    color={alarmCounts.med ? theme.amber : theme.fgDim}
+                                />
+                                <Kpi
+                                    label="LOW"
+                                    value={alarmCounts.low}
+                                    color={alarmCounts.low ? theme.accent : theme.fgDim}
+                                />
+                            </Box>
+                            {alarmView === 'rule'
+                                ? alarmGroups.map((g) => (
+                                      <AlarmGroupRow key={g.name} group={g} now={nowTs} />
+                                  ))
+                                : alarmInstances.map((inst) => (
+                                      <AlarmInstanceRow
+                                          key={inst.instance}
+                                          inst={inst}
+                                          hostWidth={alarmHostWidth}
+                                          now={nowTs}
+                                      />
+                                  ))}
+                        </>
+                    )}
                 </Panel>
             </Box>
 
-            {/* Middle column: Fleet list */}
+            {/* Middle column: interactive devices list */}
             <Box width="40%" flexDirection="column">
-                <Panel
-                    title="FLEET"
-                    sub={`${devices.length} devices`}
-                    right={
-                        <Box gap={1}>
-                            <Text>
-                                <Text color={theme.lime}>● </Text>
-                                <Text color={theme.fgDim}>on</Text>
-                            </Text>
-                            <Text>
-                                <Text color={theme.amber}>▲ </Text>
-                                <Text color={theme.fgDim}>warn</Text>
-                            </Text>
-                            <Text>
-                                <Text color={theme.red}>✕ </Text>
-                                <Text color={theme.fgDim}>crit</Text>
-                            </Text>
-                            <Text>
-                                <Text color={theme.fgFaint}>○ </Text>
-                                <Text color={theme.fgDim}>off</Text>
-                            </Text>
-                        </Box>
-                    }
-                >
-                    <Box flexDirection="column">
-                        {sortedFleet.map((d) => {
-                            const sample = samples?.[d.device];
-                            const health = deviceHealth(d, sample);
-                            return (
-                                <FleetListRow
-                                    key={d.device}
-                                    device={d}
-                                    sample={sample}
-                                    health={health}
-                                    cpuSeries={cpuHistory?.[d.device]}
-                                />
-                            );
-                        })}
-                    </Box>
-                </Panel>
+                <DevicesPanel
+                    devices={devices}
+                    samples={samples}
+                    cpuHistory={cpuHistory}
+                    alarmSeverityByDevice={alarmSeverityByDevice}
+                    loading={devicesLoading}
+                    error={devicesError}
+                    focused={fleet.focused}
+                    selectedId={selectedId}
+                    onSelect={onSelectDevice}
+                    sort={sort}
+                    filter={filter}
+                    filtering={filtering}
+                />
             </Box>
 
             {/* Right column: versions + events */}
@@ -411,6 +725,7 @@ export function OverviewTab({
                 <Panel
                     title="AGENT VERSIONS"
                     sub={target ? `latest ${target}` : 'deployed'}
+                    focused={versionsPanel.focused}
                     right={
                         upgradeState?.phase === 'running' ? (
                             <Text color={theme.accent}>● running</Text>
