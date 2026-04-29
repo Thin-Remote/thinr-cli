@@ -45,15 +45,21 @@ function useDeviceHistory(deviceId, sample) {
 // from a custom pattern stay readable instead of disappearing.
 const LEVEL_STYLE = {
     trace: { color: theme.fgDim, bold: false },
+    trc: { color: theme.fgDim, bold: false },
     debug: { color: theme.fgDim, bold: false },
+    dbg: { color: theme.fgDim, bold: false },
     info: { color: theme.fg, bold: false },
+    inf: { color: theme.fg, bold: false },
     notice: { color: theme.accent, bold: false },
     warn: { color: theme.amber, bold: false },
     warning: { color: theme.amber, bold: false },
+    wrn: { color: theme.amber, bold: false },
     error: { color: theme.red, bold: false },
+    err: { color: theme.red, bold: false },
     crit: { color: theme.red, bold: true },
     critical: { color: theme.red, bold: true },
     fatal: { color: theme.red, bold: true },
+    fat: { color: theme.red, bold: true },
 };
 
 const LEVEL_PAD = 5;
