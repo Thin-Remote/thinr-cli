@@ -332,7 +332,11 @@ export function DeviceDetailPanel({
                 )}
                 {visibleLogs.map((ln, i) => {
                     const { time, unit, msg } = parseLine(ln.text);
-                    const msgColor = ln.stream === 'err' ? theme.red : theme.fg;
+                    // Don't paint stderr lines red: many apps (nginx, mongo,
+                    // thinger) log INFO/WARN to stderr by convention, and
+                    // journalctl itself flows on stdout, so the channel is
+                    // not a reliable error signal across arbitrary sources.
+                    const msgColor = theme.fg;
                     return (
                         <Box key={`${lines.length - visibleLogs.length + i}`}>
                             <Text wrap="truncate-end">
