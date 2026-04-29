@@ -6,8 +6,11 @@ import {
     LOGS_PROPERTY,
     LOG_SOURCE_NAME_RE,
     MAX_LOG_SOURCES,
+    addLogSource,
     fallbackLogsConfig,
+    removeLogSource,
     resolveDefaultLogSource,
+    setDefaultLogSource,
     validateLogsConfig,
 } from '../lib/product/logs.js';
 
@@ -215,5 +218,49 @@ describe('fallbackLogsConfig', () => {
 describe('LOGS_PROPERTY', () => {
     it('is the literal string "logs"', () => {
         assert.equal(LOGS_PROPERTY, 'logs');
+    });
+});
+
+describe('addLogSource — pre-network validation', () => {
+    it('rejects an invalid source name before touching the network', async () => {
+        await assert.rejects(
+            addLogSource('p', { name: 'has space', command: 'x' }),
+            (err) => err.code === 'input_error' && /must be a slug/.test(err.message),
+        );
+    });
+
+    it('rejects an empty / non-string command before touching the network', async () => {
+        await assert.rejects(
+            addLogSource('p', { name: 'sys', command: '' }),
+            (err) =>
+                err.code === 'input_error' && /command must be a non-empty string/.test(err.message),
+        );
+        await assert.rejects(
+            addLogSource('p', { name: 'sys', command: 42 }),
+            (err) =>
+                err.code === 'input_error' && /command must be a non-empty string/.test(err.message),
+        );
+    });
+});
+
+describe('removeLogSource — pre-network validation', () => {
+    it('requires a name', async () => {
+        await assert.rejects(
+            removeLogSource('p', ''),
+            (err) => err.code === 'input_error' && /name is required/.test(err.message),
+        );
+        await assert.rejects(
+            removeLogSource('p'),
+            (err) => err.code === 'input_error' && /name is required/.test(err.message),
+        );
+    });
+});
+
+describe('setDefaultLogSource — pre-network validation', () => {
+    it('rejects a non-string default before touching the network', async () => {
+        await assert.rejects(
+            setDefaultLogSource('p', 42),
+            (err) => err.code === 'input_error' && /must be a string/.test(err.message),
+        );
     });
 });

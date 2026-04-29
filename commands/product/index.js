@@ -9,6 +9,7 @@ import { registerProductStatusCommand } from './status.js';
 import { registerProductFsCommands } from './fs.js';
 import { registerProductPushCommand } from './push.js';
 import { registerProductPlaybookCommand } from './playbook.js';
+import { registerProductLogsCommand } from './logs.js';
 
 /**
  * `thinr product <subcommand> <productId> …` — fan-out commands across
@@ -30,4 +31,5 @@ export function productCommand(program) {
     registerProductFsCommands(product);
     registerProductPushCommand(product);
     registerProductPlaybookCommand(product);
+    registerProductLogsCommand(product);
 }
