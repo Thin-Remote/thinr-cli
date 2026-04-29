@@ -680,7 +680,11 @@ export function OverviewTab({
                     )}
                 </Panel>
                 {productMetrics?.metrics?.length > 0 &&
-                    groupMetricsByProduct(productMetrics.metrics).map(
+                    groupMetricsByProduct(
+                        productMetrics.metrics.filter(
+                            (m) => m.visualization !== 'list',
+                        ),
+                    ).map(
                         ([product, list]) => {
                             const display =
                                 productInfo?.[product]?.name || product || 'metrics';
@@ -869,18 +873,40 @@ export function OverviewTab({
                             </Box>
                         )}
                 </Panel>
-                <Panel
-                    title="EVENTS"
-                    sub="live"
-                    right={
-                        <Text color={theme.lime}>● streaming</Text>
-                    }
-                >
-                    {events.length === 0 && <Text color={theme.fgFaint}>waiting for activity…</Text>}
-                    {events.map((e, i) => (
-                        <EventRow key={`${e.t}-${e.dev}-${i}`} e={e} isFirst={i === 0} />
-                    ))}
-                </Panel>
+                {productMetrics?.metrics?.length > 0 &&
+                    groupMetricsByProduct(
+                        productMetrics.metrics.filter(
+                            (m) => m.visualization === 'list',
+                        ),
+                    ).map(([product, list]) => {
+                        const display =
+                            productInfo?.[product]?.name || product || 'metrics';
+                        return (
+                            <Panel
+                                key={`list-${product}`}
+                                title={display.toUpperCase()}
+                                sub={`${list.length}`}
+                                right={
+                                    <Text color={theme.fgFaint}>{product}</Text>
+                                }
+                                flexGrow={0}
+                                flexShrink={0}
+                            >
+                                {list.map((m) => {
+                                    const k = `${m.product}:${m.name}`;
+                                    return (
+                                        <MetricRow
+                                            key={k}
+                                            metric={m}
+                                            value={productMetrics.values[k]}
+                                            history={productMetrics.history?.[k]}
+                                            lastUpdate={productMetrics.lastUpdate[k]}
+                                        />
+                                    );
+                                })}
+                            </Panel>
+                        );
+                    })}
             </Box>
         </Box>
     );
