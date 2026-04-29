@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
-import { getProductLogs, fallbackLogsConfig } from '../../../lib/product/logs.js';
+import {
+    fallbackLogsConfig,
+    getProductLogs,
+    resolveSourcePattern,
+} from '../../../lib/product/logs.js';
 import { debugLog } from '../../../lib/debug-log.js';
 
 // Resolve the `logs` property of a product: a list of `{name, command}`
@@ -9,9 +13,20 @@ import { debugLog } from '../../../lib/debug-log.js';
 // in. The list rarely changes, so this hook loads it once per productId
 // and ignores subsequent edits until the product changes.
 
+// Pre-resolve each source's pattern (literal `pattern` or preset →
+// pattern) so the panel never has to know about the preset catalog.
+// `resolvedPattern` is `null` when the source carries neither, in
+// which case the panel falls back to raw rendering.
+function decorate(sources) {
+    return sources.map((s) => ({
+        ...s,
+        resolvedPattern: resolveSourcePattern(s),
+    }));
+}
+
 const FALLBACK = (() => {
     const cfg = fallbackLogsConfig();
-    return { sources: cfg.sources, default: cfg.default, fallback: true };
+    return { sources: decorate(cfg.sources), default: cfg.default, fallback: true };
 })();
 
 export function useProductLogSources(productId) {
@@ -38,7 +53,7 @@ export function useProductLogSources(productId) {
                     fallback: !!cfg.__fallback,
                 });
                 setState({
-                    sources: cfg.sources,
+                    sources: decorate(cfg.sources),
                     default: cfg.default || null,
                     fallback: !!cfg.__fallback,
                     loading: false,

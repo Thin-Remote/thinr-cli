@@ -129,6 +129,46 @@ describe('addLogSource', () => {
         );
         assert.equal(config.default, 'thinger');
     });
+
+    it('persists a preset across writes', async () => {
+        const { config } = await addLogSource(
+            'p',
+            { name: 'thinger', command: 'docker logs -f thinger', preset: 'spdlog' },
+            USER,
+        );
+        assert.equal(config.sources[0].preset, 'spdlog');
+        // round-trip through the validator on read keeps the field intact
+        const stored = state.get('p');
+        assert.equal(stored.sources[0].preset, 'spdlog');
+    });
+
+    it('persists a custom pattern across writes', async () => {
+        const { config } = await addLogSource(
+            'p',
+            {
+                name: 'app',
+                command: 'tail -F /var/log/app.log',
+                pattern: '^(?<time>\\S+)\\s+(?<level>\\w+)\\s+(?<msg>.*)$',
+            },
+            USER,
+        );
+        assert.match(config.sources[0].pattern, /level/);
+    });
+
+    it('replacing a source clears the previous pattern when neither is given', async () => {
+        await addLogSource(
+            'p',
+            { name: 'app', command: 'tail -F /var/log/app.log', preset: 'spdlog' },
+            USER,
+        );
+        const { config } = await addLogSource(
+            'p',
+            { name: 'app', command: 'tail -F /var/log/app.log' },
+            USER,
+        );
+        assert.equal(config.sources[0].preset, undefined);
+        assert.equal(config.sources[0].pattern, undefined);
+    });
 });
 
 describe('removeLogSource', () => {

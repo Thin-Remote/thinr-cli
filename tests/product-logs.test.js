@@ -7,12 +7,15 @@ import {
     LOG_SOURCE_NAME_RE,
     MAX_LOG_SOURCES,
     addLogSource,
+    compileLogPattern,
     fallbackLogsConfig,
     removeLogSource,
     resolveDefaultLogSource,
+    resolveSourcePattern,
     setDefaultLogSource,
     validateLogsConfig,
 } from '../lib/product/logs.js';
+import { getPreset, listPresets } from '../lib/product/log-presets.js';
 
 describe('LOG_SOURCE_NAME_RE', () => {
     it('accepts slug-ish names up to 32 chars', () => {
@@ -262,5 +265,176 @@ describe('setDefaultLogSource — pre-network validation', () => {
             setDefaultLogSource('p', 42),
             (err) => err.code === 'input_error' && /must be a string/.test(err.message),
         );
+    });
+});
+
+describe('validateLogsConfig — pattern and preset', () => {
+    it('accepts a source with a custom pattern', () => {
+        const cfg = validateLogsConfig({
+            sources: [
+                {
+                    name: 'custom',
+                    command: 'tail -F /var/log/app.log',
+                    pattern: '^(?<time>\\S+)\\s+(?<level>\\w+)\\s+(?<msg>.*)$',
+                },
+            ],
+        });
+        assert.equal(cfg.sources[0].pattern, '^(?<time>\\S+)\\s+(?<level>\\w+)\\s+(?<msg>.*)$');
+    });
+
+    it('accepts a source with a known preset', () => {
+        const cfg = validateLogsConfig({
+            sources: [
+                { name: 'thinger', command: 'docker logs -f thinger', preset: 'spdlog' },
+            ],
+        });
+        assert.equal(cfg.sources[0].preset, 'spdlog');
+    });
+
+    it('rejects a source with both pattern and preset', () => {
+        assert.throws(
+            () =>
+                validateLogsConfig({
+                    sources: [
+                        {
+                            name: 'x',
+                            command: 'cat',
+                            pattern: '^(?<msg>.*)$',
+                            preset: 'spdlog',
+                        },
+                    ],
+                }),
+            /mutually exclusive/,
+        );
+    });
+
+    it('rejects an unknown preset name', () => {
+        assert.throws(
+            () =>
+                validateLogsConfig({
+                    sources: [{ name: 'x', command: 'cat', preset: 'logfmt' }],
+                }),
+            /preset "logfmt" is unknown/,
+        );
+    });
+
+    it('rejects a regex that does not compile', () => {
+        assert.throws(
+            () =>
+                validateLogsConfig({
+                    sources: [{ name: 'x', command: 'cat', pattern: '(?<unclosed>' }],
+                }),
+            /not a valid regular expression/,
+        );
+    });
+
+    it('rejects an empty pattern string', () => {
+        assert.throws(
+            () =>
+                validateLogsConfig({
+                    sources: [{ name: 'x', command: 'cat', pattern: '' }],
+                }),
+            /pattern must be a non-empty regex/,
+        );
+    });
+
+    it('rejects an empty preset string', () => {
+        assert.throws(
+            () =>
+                validateLogsConfig({
+                    sources: [{ name: 'x', command: 'cat', preset: '' }],
+                }),
+            /preset must be a non-empty preset name/,
+        );
+    });
+});
+
+describe('compileLogPattern', () => {
+    it('returns a RegExp for a valid pattern', () => {
+        const re = compileLogPattern('^(?<level>\\w+)$');
+        assert.ok(re instanceof RegExp);
+        assert.equal(re.exec('INFO').groups.level, 'INFO');
+    });
+
+    it('throws inputError for an invalid pattern', () => {
+        assert.throws(
+            () => compileLogPattern('('),
+            (err) => err.code === 'input_error' && /not a valid regular expression/.test(err.message),
+        );
+    });
+});
+
+describe('resolveSourcePattern', () => {
+    it('returns the literal pattern when set', () => {
+        const out = resolveSourcePattern({ name: 'x', command: 'c', pattern: '^abc$' });
+        assert.equal(out, '^abc$');
+    });
+
+    it('returns the preset pattern when preset is set', () => {
+        const out = resolveSourcePattern({ name: 'x', command: 'c', preset: 'journalctl' });
+        assert.equal(out, getPreset('journalctl').pattern);
+    });
+
+    it('returns null when neither is set', () => {
+        assert.equal(resolveSourcePattern({ name: 'x', command: 'c' }), null);
+    });
+
+    it('returns null for an unknown preset', () => {
+        assert.equal(
+            resolveSourcePattern({ name: 'x', command: 'c', preset: 'nope' }),
+            null,
+        );
+    });
+});
+
+describe('addLogSource — pattern/preset validation', () => {
+    it('rejects pattern + preset together before touching the network', async () => {
+        await assert.rejects(
+            addLogSource('p', {
+                name: 'x',
+                command: 'cat',
+                pattern: '^(?<msg>.*)$',
+                preset: 'spdlog',
+            }),
+            (err) => err.code === 'input_error' && /mutually exclusive/.test(err.message),
+        );
+    });
+
+    it('rejects an unknown preset before touching the network', async () => {
+        await assert.rejects(
+            addLogSource('p', { name: 'x', command: 'cat', preset: 'logfmt' }),
+            (err) => err.code === 'input_error' && /unknown/.test(err.message),
+        );
+    });
+
+    it('rejects an invalid pattern before touching the network', async () => {
+        await assert.rejects(
+            addLogSource('p', { name: 'x', command: 'cat', pattern: '(' }),
+            (err) =>
+                err.code === 'input_error' &&
+                /not a valid regular expression/.test(err.message),
+        );
+    });
+});
+
+describe('listPresets', () => {
+    it('exposes journalctl, spdlog, nginx-error, nginx-access', () => {
+        const names = listPresets().map((p) => p.name);
+        for (const wanted of ['journalctl', 'spdlog', 'nginx-error', 'nginx-access']) {
+            assert.ok(names.includes(wanted), `expected preset "${wanted}" to be listed`);
+        }
+    });
+
+    it('returns presets sorted by name', () => {
+        const names = listPresets().map((p) => p.name);
+        const sorted = [...names].sort((a, b) => a.localeCompare(b));
+        assert.deepEqual(names, sorted);
+    });
+
+    it('returns shallow clones, not references to the catalog', () => {
+        const a = listPresets();
+        const b = listPresets();
+        assert.notEqual(a, b);
+        assert.notEqual(a[0], b[0]);
     });
 });

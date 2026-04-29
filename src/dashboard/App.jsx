@@ -183,13 +183,37 @@ function AppInner({ server, profile, profiles, onAction }) {
         setLogsClearToken((n) => n + 1);
     };
 
+    // Level filter for the log panel. Cycles `all → info → warn → error`;
+    // disabled (and reset to `all`) when the active source has no
+    // pattern, since without a captured `level` we have nothing to
+    // compare. Lines without a captured level always pass — we don't
+    // hide what we can't classify.
+    const [levelFilter, setLevelFilter] = useState('all');
+    const activePattern = activeSource?.resolvedPattern || null;
+    // Heuristic: a regex that names a `level` capture group has a
+    // `(?<level>` substring. Cheap, correct for any regex we'll ship
+    // and any operator-supplied pattern.
+    const filterEnabled = !!(activePattern && /\(\?<level>/.test(activePattern));
+    useEffect(() => {
+        if (!filterEnabled && levelFilter !== 'all') setLevelFilter('all');
+    }, [filterEnabled, levelFilter]);
+    const cycleLevelFilter = () => {
+        if (!filterEnabled) return;
+        setLevelFilter((cur) => {
+            const order = ['all', 'info', 'warn', 'error'];
+            const i = order.indexOf(cur);
+            return order[(i + 1) % order.length];
+        });
+    };
+
     const devicesDetailHint = useMemo(
         () => [
             ...DEVICES_DETAIL_HINT_BASE,
             ...(sourceCount > 1 ? [{ k: 'l', label: 'log src' }] : []),
+            ...(filterEnabled ? [{ k: 'f', label: 'level' }] : []),
             ...DEVICES_DETAIL_HINT_TAIL,
         ],
-        [sourceCount],
+        [sourceCount, filterEnabled],
     );
 
     // Top-level tab routing + quit. Yields to any modal on the stack so
@@ -256,6 +280,7 @@ function AppInner({ server, profile, profiles, onAction }) {
             if (input === 'p') setPaused((p) => !p);
             else if (input === 'c') setLogsClearToken((n) => n + 1);
             else if (input === 'l') cycleLogSource();
+            else if (input === 'f') cycleLevelFilter();
         },
     });
 
@@ -310,6 +335,8 @@ function AppInner({ server, profile, profiles, onAction }) {
                         logSources={logSources}
                         activeSource={activeSource}
                         activeSourceIndex={activeSourceIndex}
+                        levelFilter={levelFilter}
+                        filterEnabled={filterEnabled}
                     />
                 </Box>
             )}

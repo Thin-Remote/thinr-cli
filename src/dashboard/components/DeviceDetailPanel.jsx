@@ -1,10 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useStdout } from 'ink';
 import { theme } from '../theme.js';
 import { Panel } from './Panel.jsx';
 import { Sparkline, Bar, colorForPct } from './Sparkline.jsx';
 import { useLogs } from '../hooks/useLogs.js';
 import { deviceHealth, normalizeAgentVersion } from '../lib/status.js';
+import {
+    levelPassesThreshold,
+    parseLogLine,
+} from '../../../lib/product/log-presets.js';
 
 const HISTORY_LEN = 40;
 
@@ -36,14 +40,34 @@ function useDeviceHistory(deviceId, sample) {
     return historyRef.current;
 }
 
-const JOURNAL_RE = /^(\w{3}\s+\d+\s+(\d{2}:\d{2}:\d{2}))\s+\S+\s+([^:]+):\s?(.*)$/;
+// Color mapping for parsed log levels. Keys are normalized (lowercase).
+// Anything outside this table falls back to `theme.fg` so unknown levels
+// from a custom pattern stay readable instead of disappearing.
+const LEVEL_STYLE = {
+    trace: { color: theme.fgDim, bold: false },
+    debug: { color: theme.fgDim, bold: false },
+    info: { color: theme.fg, bold: false },
+    notice: { color: theme.accent, bold: false },
+    warn: { color: theme.amber, bold: false },
+    warning: { color: theme.amber, bold: false },
+    error: { color: theme.red, bold: false },
+    crit: { color: theme.red, bold: true },
+    critical: { color: theme.red, bold: true },
+    fatal: { color: theme.red, bold: true },
+};
 
-function parseLine(text) {
-    const m = text.match(JOURNAL_RE);
-    if (!m) return { time: null, unit: null, msg: text };
-    const unit = m[3].replace(/\[\d+\]$/, '');
-    return { time: m[2], unit, msg: m[4] };
+const LEVEL_PAD = 5;
+function padLevel(s) {
+    if (s.length >= LEVEL_PAD) return s.slice(0, LEVEL_PAD);
+    return s + ' '.repeat(LEVEL_PAD - s.length);
 }
+
+const FILTER_LABEL = {
+    all: null,
+    info: 'level ≥ info',
+    warn: 'level ≥ warn',
+    error: 'level ≥ error',
+};
 
 function fmtBytes(n) {
     if (n == null) return '—';
@@ -119,6 +143,45 @@ function Sep() {
     return <Text color={theme.fgFaint}>{'  ·  '}</Text>;
 }
 
+// Render a single log line. When `parsed` is non-null the line is split
+// into time / level / msg with theme-aware colours; otherwise the raw
+// text is shown so we never silently drop lines that didn't match the
+// pattern (multi-line stack traces, banners, etc.).
+function LogLineRow({ text, parsed }) {
+    if (!parsed) {
+        return (
+            <Box>
+                <Text color={theme.fg} wrap="truncate-end">
+                    {text || ' '}
+                </Text>
+            </Box>
+        );
+    }
+    const { time, level, level_norm: levelNorm, msg } = parsed;
+    const style = levelNorm ? LEVEL_STYLE[levelNorm] : null;
+    const levelColor = style?.color || theme.fg;
+    const levelBold = !!style?.bold;
+    // Critical/fatal lines also paint the message in red so the whole
+    // entry stands out, not just the 5-char level slot.
+    const msgRed = levelNorm === 'fatal' || levelNorm === 'critical' || levelNorm === 'crit';
+    const msgColor = msgRed ? theme.red : theme.fg;
+    return (
+        <Box>
+            <Text wrap="truncate-end">
+                {time && <Text color={theme.fgFaint}>{time} </Text>}
+                {level && (
+                    <Text color={levelColor} bold={levelBold}>
+                        {padLevel(level.toUpperCase())}{' '}
+                    </Text>
+                )}
+                <Text color={msgColor} bold={levelBold && msgRed}>
+                    {msg || ' '}
+                </Text>
+            </Text>
+        </Box>
+    );
+}
+
 export function DeviceDetailPanel({
     device,
     sample,
@@ -129,6 +192,8 @@ export function DeviceDetailPanel({
     logSources,
     activeSource,
     activeSourceIndex,
+    levelFilter = 'all',
+    filterEnabled = false,
 }) {
     const id = device?.device || null;
     const online = !!device?.connection?.active;
@@ -139,6 +204,18 @@ export function DeviceDetailPanel({
     const sourceCount = sources.length;
     const sourceName = activeSource?.name || null;
     const sourceCommand = activeSource?.command || null;
+    const sourcePattern = activeSource?.resolvedPattern || null;
+    // Compile the active pattern once per source change. `null` means
+    // "render raw" — keeps the panel compatible with sources that
+    // declare neither a pattern nor a preset.
+    const compiledPattern = useMemo(() => {
+        if (!sourcePattern) return null;
+        try {
+            return new RegExp(sourcePattern);
+        } catch {
+            return null;
+        }
+    }, [sourcePattern]);
     const { lines, status: logStatus, error: logError, clear } = useLogs({
         deviceId: id,
         online,
@@ -186,7 +263,23 @@ export function DeviceDetailPanel({
     // panel borders (2). Plus dashboard header+footer (2). Total ≈ 15 (+1 swap).
     const chromeReserve = 15 + (hasSwap ? 1 : 0);
     const logHeight = Math.max(4, (stdout?.rows || 40) - chromeReserve);
-    const visibleLogs = lines.slice(-logHeight);
+
+    // Parse + filter once so the slice that fills the visible window
+    // already accounts for hidden lines. We don't want a `warn+` filter
+    // to leave the panel half-empty when most lines were `info`.
+    const parsedLines = useMemo(() => {
+        return lines.map((ln) => {
+            const parsed = parseLogLine(ln.text, compiledPattern);
+            return { line: ln, parsed };
+        });
+    }, [lines, compiledPattern]);
+    const filteredLines = useMemo(() => {
+        if (levelFilter === 'all') return parsedLines;
+        return parsedLines.filter((p) =>
+            levelPassesThreshold(p.parsed?.level_norm, levelFilter),
+        );
+    }, [parsedLines, levelFilter]);
+    const visibleLogs = filteredLines.slice(-logHeight);
 
     const logStatusLabel = (() => {
         if (!id) return { text: 'select a device', color: theme.fgDim };
@@ -323,6 +416,18 @@ export function DeviceDetailPanel({
                             <Text color={theme.magenta}>l</Text>
                         </>
                     )}
+                    {filterEnabled && FILTER_LABEL[levelFilter] && (
+                        <>
+                            <Sep />
+                            <Text color={theme.magenta}>{FILTER_LABEL[levelFilter]}</Text>
+                        </>
+                    )}
+                    {!filterEnabled && (
+                        <>
+                            <Sep />
+                            <Text color={theme.fgFaint}>set a pattern to filter by level</Text>
+                        </>
+                    )}
                 </Box>
                 <Text color={logStatusLabel.color}>● {logStatusLabel.text}</Text>
             </Box>
@@ -330,23 +435,13 @@ export function DeviceDetailPanel({
                 {visibleLogs.length === 0 && online && !logError && (
                     <Text color={theme.fgFaint}>waiting for log stream…</Text>
                 )}
-                {visibleLogs.map((ln, i) => {
-                    const { time, unit, msg } = parseLine(ln.text);
-                    // Don't paint stderr lines red: many apps (nginx, mongo,
-                    // thinger) log INFO/WARN to stderr by convention, and
-                    // journalctl itself flows on stdout, so the channel is
-                    // not a reliable error signal across arbitrary sources.
-                    const msgColor = theme.fg;
-                    return (
-                        <Box key={`${lines.length - visibleLogs.length + i}`}>
-                            <Text wrap="truncate-end">
-                                {time && <Text color={theme.fgFaint}>{time} </Text>}
-                                {unit && <Text color={theme.magenta}>{unit} </Text>}
-                                <Text color={msgColor}>{msg || ' '}</Text>
-                            </Text>
-                        </Box>
-                    );
-                })}
+                {visibleLogs.map(({ line, parsed }, i) => (
+                    <LogLineRow
+                        key={`${filteredLines.length - visibleLogs.length + i}`}
+                        text={line.text}
+                        parsed={parsed}
+                    />
+                ))}
             </Box>
         </Panel>
     );
