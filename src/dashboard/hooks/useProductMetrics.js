@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { getProductProperty } from '../../../lib/product.js';
 import { debugCount, debugLog } from '../../../lib/debug-log.js';
 import { eventStream } from '../../../lib/dashboard/event-stream.js';
+import { aggregate, getPath } from '../../../lib/dashboard/metric-aggregate.js';
 
 // Reads `dashboard_metrics` from each product present in the fleet and
 // watches their resources across every device of each product via a
@@ -17,31 +18,6 @@ const HISTORY_LEN = 32;
 
 function metricKey(productId, name) {
     return `${productId}:${name}`;
-}
-
-function getPath(obj, dotted) {
-    if (!dotted) return obj;
-    return dotted.split('.').reduce((acc, key) => (acc == null ? acc : acc[key]), obj);
-}
-
-function aggregate(values, mode) {
-    const nums = values.filter((v) => Number.isFinite(Number(v))).map(Number);
-    if (nums.length === 0 && mode !== 'count') return null;
-    switch (mode) {
-        case 'avg':
-            return nums.reduce((a, b) => a + b, 0) / nums.length;
-        case 'max':
-            return Math.max(...nums);
-        case 'min':
-            return Math.min(...nums);
-        case 'count':
-            return values.filter((v) => v != null).length;
-        case 'none':
-            return values;
-        case 'sum':
-        default:
-            return nums.reduce((a, b) => a + b, 0);
-    }
 }
 
 export function useProductMetrics(productIds) {

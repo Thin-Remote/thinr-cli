@@ -57,7 +57,7 @@ export function registerProductMetricCommands(product) {
         .option('-f, --field <field>', 'Dot-path to the numeric value inside the response')
         .option(
             '-a, --aggregation <agg>',
-            'Aggregation across the fleet (sum, avg, max, min, count, top, none)',
+            'Aggregation across the fleet (sum, avg, max, min, count, top, none, distribution)',
         )
         .option(
             '-v, --visualization <viz>',

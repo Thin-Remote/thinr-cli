@@ -317,7 +317,98 @@ function formatMetricValue(v, unit) {
     return unit ? `${formatted} ${unit}` : formatted;
 }
 
+function DistributionRows({ metric, value, lastUpdate }) {
+    const ageS = lastUpdate ? Math.round((Date.now() - lastUpdate) / 1000) : null;
+    const isPlainObject =
+        value && typeof value === 'object' && !Array.isArray(value);
+    const buckets = isPlainObject
+        ? Object.entries(value).filter(
+              ([, c]) => Number.isFinite(Number(c)) && Number(c) > 0,
+          )
+        : [];
+    const total = buckets.reduce((acc, [, c]) => acc + Number(c), 0);
+    const sorted = [...buckets].sort(
+        (a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]),
+    );
+    return (
+        <Box flexDirection="column">
+            <Box>
+                <Box flexGrow={1} flexBasis={0} minWidth={0}>
+                    <Text color={theme.fgDim} wrap="truncate-end">
+                        {metric.label || metric.name}
+                    </Text>
+                </Box>
+                <Box width={6} justifyContent="flex-end">
+                    <Text color={theme.fgFaint}>
+                        {ageS == null ? '—' : `${ageS}s`}
+                    </Text>
+                </Box>
+            </Box>
+            {sorted.length === 0 ? (
+                <Box marginLeft={2}>
+                    <Text color={theme.fgFaint}>no samples yet</Text>
+                </Box>
+            ) : (
+                <>
+                    {sorted.map(([k, c]) => {
+                        const count = Number(c);
+                        const pct =
+                            total > 0 ? Math.round((count / total) * 100) : 0;
+                        return (
+                            <Box key={k}>
+                                <Box width={2} />
+                                <Box flexGrow={1} flexBasis={0} minWidth={0}>
+                                    <Text color={theme.fg} wrap="truncate-end">
+                                        {k}
+                                    </Text>
+                                </Box>
+                                <Box
+                                    width={6}
+                                    justifyContent="flex-end"
+                                    marginRight={1}
+                                >
+                                    <Text color={theme.accent} bold>
+                                        {count}
+                                    </Text>
+                                </Box>
+                                <Box width={5} justifyContent="flex-end">
+                                    <Text color={theme.fgFaint}>{pct}%</Text>
+                                </Box>
+                            </Box>
+                        );
+                    })}
+                    <Box>
+                        <Box width={2} />
+                        <Box flexGrow={1} flexBasis={0} minWidth={0}>
+                            <Text color={theme.fgDim}>total</Text>
+                        </Box>
+                        <Box
+                            width={6}
+                            justifyContent="flex-end"
+                            marginRight={1}
+                        >
+                            <Text color={theme.fgDim} bold>
+                                {total}
+                            </Text>
+                        </Box>
+                        <Box width={5} />
+                    </Box>
+                </>
+            )}
+        </Box>
+    );
+}
+
 function MetricRow({ metric, value, history, lastUpdate }) {
+    if (metric.aggregation === 'distribution') {
+        return (
+            <DistributionRows
+                metric={metric}
+                value={value}
+                lastUpdate={lastUpdate}
+            />
+        );
+    }
     const ageS = lastUpdate ? Math.round((Date.now() - lastUpdate) / 1000) : null;
     const showSparkline = metric.visualization === 'sparkline';
     // Auto-scale against the visible window so values of any magnitude
