@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createDeviceAPI } from '../../../lib/device-api.js';
+import { FALLBACK_LOGS_COMMAND } from '../../../lib/product/logs.js';
 
 const MAX_LINES = 500;
-const INITIAL_TAIL = 30;
 
-export function useLogs({ deviceId, online, paused }) {
+export function useLogs({ deviceId, online, paused, command }) {
     const [lines, setLines] = useState([]);
     const [status, setStatus] = useState('idle'); // idle | connecting | streaming | ended | error
     const [error, setError] = useState(null);
@@ -16,6 +16,8 @@ export function useLogs({ deviceId, online, paused }) {
         remainderRef.current = '';
         setLines([]);
     }, []);
+
+    const effectiveCmd = command || FALLBACK_LOGS_COMMAND;
 
     useEffect(() => {
         bufferRef.current = [];
@@ -58,8 +60,7 @@ export function useLogs({ deviceId, online, paused }) {
         (async () => {
             try {
                 const api = createDeviceAPI(deviceId);
-                const cmd = `journalctl --no-pager --output=short -n ${INITIAL_TAIL} -f`;
-                const result = await api.execStream(cmd, {
+                const result = await api.execStream(effectiveCmd, {
                     onStdout: (s) => !cancelled && pushChunk(s, 'out'),
                     onStderr: (s) => !cancelled && pushChunk(s, 'err'),
                     onCancel: (fn) => {
@@ -69,7 +70,7 @@ export function useLogs({ deviceId, online, paused }) {
                 if (cancelled) return;
                 if (result.timedOut) setError('log stream timed out');
                 else if (result.exitCode != null && result.exitCode !== 0)
-                    setError(`journalctl exited with code ${result.exitCode}`);
+                    setError(`log stream exited with code ${result.exitCode}`);
                 setStatus('ended');
             } catch (e) {
                 if (cancelled) return;
@@ -88,7 +89,7 @@ export function useLogs({ deviceId, online, paused }) {
                 }
             }
         };
-    }, [deviceId, online, paused]);
+    }, [deviceId, online, paused, effectiveCmd]);
 
     return { lines, status, error, clear };
 }

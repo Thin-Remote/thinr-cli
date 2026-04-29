@@ -126,16 +126,24 @@ export function DeviceDetailPanel({
     paused,
     clearToken,
     focused,
+    logSources,
+    activeSource,
+    activeSourceIndex,
 }) {
     const id = device?.device || null;
     const online = !!device?.connection?.active;
     const latest = sample || null;
     const history = useDeviceHistory(id, sample);
     const monError = null;
+    const sources = logSources?.sources || [];
+    const sourceCount = sources.length;
+    const sourceName = activeSource?.name || null;
+    const sourceCommand = activeSource?.command || null;
     const { lines, status: logStatus, error: logError, clear } = useLogs({
         deviceId: id,
         online,
         paused,
+        command: sourceCommand,
     });
     const { stdout } = useStdout();
 
@@ -304,8 +312,17 @@ export function DeviceDetailPanel({
             {/* Logs */}
             <Box marginTop={1} justifyContent="space-between">
                 <Box>
-                    <Text color={theme.fgDim}>journal </Text>
+                    <Text color={theme.fgDim}>{sourceName || 'logs'} </Text>
                     <Text color={theme.fgFaint}>tail · {device.device}</Text>
+                    {sourceCount > 1 && activeSourceIndex >= 0 && (
+                        <>
+                            <Sep />
+                            <Text color={theme.fgFaint}>
+                                {activeSourceIndex + 1}/{sourceCount}{' '}
+                            </Text>
+                            <Text color={theme.magenta}>l</Text>
+                        </>
+                    )}
                 </Box>
                 <Text color={logStatusLabel.color}>● {logStatusLabel.text}</Text>
             </Box>

@@ -15,6 +15,7 @@ import { useDevices } from './hooks/useDevices.js';
 import { useFleetMonitoringStream } from './hooks/useFleetMonitoringStream.js';
 import { useFleetAlarms } from './hooks/useFleetAlarms.js';
 import { useFleetProducts } from './hooks/useFleetProducts.js';
+import { useProductLogSources } from './hooks/useProductLogSources.js';
 import { useProductMetrics } from './hooks/useProductMetrics.js';
 import { useLatestAgentVersion } from './hooks/useLatestAgentVersion.js';
 import { useUpgradeController } from './hooks/useUpgradeController.js';
@@ -62,11 +63,13 @@ const FILTER_HINT = [
     { k: 'esc', label: 'cancel' },
 ];
 
-const DEVICES_DETAIL_HINT = [
+const DEVICES_DETAIL_HINT_BASE = [
     { k: '1-5', label: 'tabs' },
     { k: '/', label: 'switch' },
     { k: 'p', label: 'pause' },
     { k: 'c', label: 'clear' },
+];
+const DEVICES_DETAIL_HINT_TAIL = [
     { k: 'enter', label: 'console' },
     { k: 'q', label: 'quit' },
 ];
@@ -145,6 +148,49 @@ function AppInner({ server, profile, profiles, onAction }) {
     );
     const selected = devices.find((d) => d.device === selectedId);
     const selectedOnline = !!selected?.connection?.active;
+    const selectedProductId = selected?.product || null;
+    const logSources = useProductLogSources(selectedProductId);
+    const [activeSourceName, setActiveSourceName] = useState(null);
+
+    // Reset the active source whenever the selected device or product
+    // changes, or when the sources finish loading. Keep the current
+    // selection if it still exists in the new list — that way cycling
+    // sources isn't interrupted by an unrelated re-render.
+    useEffect(() => {
+        if (logSources.loading) return;
+        const list = logSources.sources;
+        if (list.length === 0) {
+            setActiveSourceName(null);
+            return;
+        }
+        setActiveSourceName((prev) => {
+            if (prev && list.some((s) => s.name === prev)) return prev;
+            return logSources.default || list[0].name;
+        });
+    }, [selectedId, selectedProductId, logSources.loading, logSources.sources, logSources.default]);
+
+    const activeSourceIndex = activeSourceName
+        ? logSources.sources.findIndex((s) => s.name === activeSourceName)
+        : -1;
+    const activeSource = activeSourceIndex >= 0 ? logSources.sources[activeSourceIndex] : null;
+    const sourceCount = logSources.sources.length;
+
+    const cycleLogSource = () => {
+        if (sourceCount <= 1) return;
+        const i = activeSourceIndex >= 0 ? activeSourceIndex : 0;
+        const next = logSources.sources[(i + 1) % sourceCount];
+        setActiveSourceName(next.name);
+        setLogsClearToken((n) => n + 1);
+    };
+
+    const devicesDetailHint = useMemo(
+        () => [
+            ...DEVICES_DETAIL_HINT_BASE,
+            ...(sourceCount > 1 ? [{ k: 'l', label: 'log src' }] : []),
+            ...DEVICES_DETAIL_HINT_TAIL,
+        ],
+        [sourceCount],
+    );
 
     // Top-level tab routing + quit. Yields to any modal on the stack so
     // `1-5` and `q` don't escape filter mode or modals unexpectedly.
@@ -196,7 +242,7 @@ function AppInner({ server, profile, profiles, onAction }) {
         id: 'devices-detail',
         parent: 'devices',
         when: tab === 'devices',
-        hint: DEVICES_DETAIL_HINT,
+        hint: devicesDetailHint,
         handlers: (input, key) => {
             if (input === '/') {
                 setDevicePickerOpen(true);
@@ -209,6 +255,7 @@ function AppInner({ server, profile, profiles, onAction }) {
             }
             if (input === 'p') setPaused((p) => !p);
             else if (input === 'c') setLogsClearToken((n) => n + 1);
+            else if (input === 'l') cycleLogSource();
         },
     });
 
@@ -260,6 +307,9 @@ function AppInner({ server, profile, profiles, onAction }) {
                         paused={paused}
                         clearToken={logsClearToken}
                         focused
+                        logSources={logSources}
+                        activeSource={activeSource}
+                        activeSourceIndex={activeSourceIndex}
                     />
                 </Box>
             )}
