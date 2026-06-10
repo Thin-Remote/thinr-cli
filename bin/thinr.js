@@ -6,7 +6,6 @@ import { dirname, resolve } from 'path';
 import { Command } from 'commander';
 import figlet from 'figlet';
 import { accent, info } from '../lib/format.js';
-import ora from 'ora';
 import { configExists, readConfig, setActiveProfile } from '../lib/config.js';
 import { detectJsonModeFromArgv } from '../lib/output.js';
 
@@ -39,7 +38,7 @@ import { logoutCommand } from '../commands/logout.js';
 import { playbookCommand } from '../commands/playbook/index.js';
 import { productCommand } from '../commands/product/index.js';
 import { profileCommand } from '../commands/profile.js';
-import { dashboardCommand } from '../commands/dashboard.js';
+import { runDashboard } from '../commands/dashboard.js';
 import { setBaseURL } from '../lib/api.js';
 import { startMCPServer } from '../lib/mcp/server.js';
 
@@ -62,7 +61,6 @@ deviceCommand(program);
 fleetCommand(program);
 productCommand(program);
 playbookCommand(program);
-dashboardCommand(program);
 profileCommand(program);
 logoutCommand(program);
 
@@ -95,27 +93,24 @@ if (configExists()) {
     }
 }
 
-// Handle no command (just "thinr")
+// Handle no command (just "thinr"): launch the dashboard when running
+// interactively. Non-TTY contexts (pipes, scripts, `thinr | cat`) fall
+// back to `--help` so they get something useful instead of an Ink crash.
 if (process.argv.length <= 2) {
-    const spinner = ora('Checking configuration...').start();
-
-    try {
+    if (!process.stdout.isTTY) {
+        program.help();
+    } else {
         if (!configExists()) {
-            // Display banner only if configuration doesn't exist
             displayBanner();
-            spinner.succeed('No configuration found. Starting setup...');
-            await authenticate();
-            program.help();
-        } else {
-            spinner.succeed('Configuration found');
-            // Show help if already configured, but don't display banner twice
-            program.help();
+            try {
+                await authenticate();
+            } catch (error) {
+                console.error(`Configuration error: ${error.message}`);
+                process.exit(1);
+            }
         }
-    } catch (error) {
-        spinner.fail(`Configuration error: ${error.message}`);
-        process.exit(1);
+        await runDashboard();
     }
-    spinner.succeed('Configuration found');
 } else {
     // Parse arguments - don't show banner for regular commands
     program.parse(process.argv);

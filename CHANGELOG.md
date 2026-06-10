@@ -1,34 +1,35 @@
 # Changelog
 
-## [Unreleased]
+## [1.2.0] - 2026-06-10
 
 ### Added
 
+- `thinr` with no arguments now launches the interactive dashboard
+  directly when stdout is a TTY (and a configuration exists), so the
+  fleet view is one keystroke away. Non-TTY contexts (pipes, scripts)
+  fall back to `--help`. First-time users still get the auth flow,
+  then drop straight into the dashboard.
+- TUI dashboard: alarms panel on the overview tab, with rule- and
+  instance-level views, severity colouring and live updates over the
+  same event stream the rest of the dashboard already uses.
+- `thinr device delete <deviceId>` — remove a device record from the
+  platform. Interactive `confirm` by default, `--yes` to skip in
+  scripts, idempotent on a missing device. Useful after re-provisioning
+  an agent under a new hostname leaves the old `ip-…` record offline.
+- MCP: `thinr_device_delete` — same operation for AI clients.
 - MCP: `thinr_push` and `thinr_pull` — upload a local file to a
   device and download a remote file to local disk, respectively.
   Rounds out filesystem parity with the CLI so an agent can move
   binary or large payloads that don't fit inline in `thinr_write`.
-
-### Changed
-
-- Unified filesystem verbs across CLI, MCP and playbooks so the same
-  eight nouns mean the same thing everywhere: `read` / `write`
-  (inline content) · `push` / `pull` (local ↔ remote file transfer)
-  · `ls` · `mkdir` · `rm` · `mv`.
-- CLI: `thinr device cat` is now `thinr device read` (`cat` kept as
-  a hidden alias). New `thinr device write <deviceId> <path>
-  [content]` accepts the payload as an argument or on stdin.
-- MCP: `thinr_delete` renamed to `thinr_rm`, `thinr_move` renamed to
-  `thinr_mv`. No backwards-compatibility aliases.
-- Playbook actions: `delete` → `rm`, `move` → `mv`. The `write`
-  action now only accepts inline `content`; use the new `push`
-  action to upload a local file (`source`, `destination`). New
-  `pull` action downloads a remote file to the local disk.
-
-## [1.2.0] - 2026-04-16
-
-### Added
-
+- MCP: alarms tools (`thinr_alarm_instances`,
+  `thinr_alarm_instance_get`, `thinr_alarm_instance_stats`,
+  `thinr_alarm_instance_update`, `thinr_alarm_instance_delete`,
+  `thinr_alarm_rules`, `thinr_alarm_rule_read`, `thinr_alarm_rule_write`,
+  `thinr_alarm_rule_delete`) — list, inspect and manage alarm
+  instances and rules from AI clients, with state/severity parsing
+  shared with the dashboard.
+- MCP: product profile config tools (buckets, properties, API
+  resources) and access-token tools (user-level and device-level).
 - `thinr product exec <productId> <command...>` — run a shell command
   in parallel on every active device of a product, with bounded
   concurrency (`-c, --concurrency`, default 10), per-device timeout
@@ -48,8 +49,26 @@
 
 ### Changed
 
+- Unified filesystem verbs across CLI, MCP and playbooks so the same
+  eight nouns mean the same thing everywhere: `read` / `write`
+  (inline content) · `push` / `pull` (local ↔ remote file transfer)
+  · `ls` · `mkdir` · `rm` · `mv`.
+- CLI: `thinr device cat` is now `thinr device read` (`cat` kept as
+  a hidden alias). New `thinr device write <deviceId> <path>
+  [content]` accepts the payload as an argument or on stdin.
+- MCP: `thinr_delete` renamed to `thinr_rm`, `thinr_move` renamed to
+  `thinr_mv`. No backwards-compatibility aliases.
+- Playbook actions: `delete` → `rm`, `move` → `mv`. The `write`
+  action now only accepts inline `content`; use the new `push`
+  action to upload a local file (`source`, `destination`). New
+  `pull` action downloads a remote file to the local disk.
 - `cli-table3` added as a direct dependency to render the
   product-exec summary.
+
+### Removed
+
+- `thinr dashboard` subcommand. The dashboard is now the default for
+  bare `thinr`; the explicit subcommand had not shipped to anyone yet.
 
 ## [1.1.0] - 2026-04-16
 

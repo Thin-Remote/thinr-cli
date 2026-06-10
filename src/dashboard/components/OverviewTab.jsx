@@ -676,6 +676,19 @@ export function OverviewTab({
 }) {
     useTabCycle('overview');
     const { stdout } = useStdout();
+    // Subscribe to resize so the per-panel row allocation below picks up
+    // the new terminal height on the next render. `stdout.rows` is a
+    // getter that reflects the current size, but reading it during render
+    // does not, by itself, schedule a re-render when the terminal is
+    // resized — the listener below does.
+    const [terminalRows, setTerminalRows] = useState(() => stdout?.rows ?? 36);
+    useEffect(() => {
+        if (!stdout) return;
+        const update = () => setTerminalRows(stdout.rows ?? 36);
+        update();
+        stdout.on('resize', update);
+        return () => stdout.off('resize', update);
+    }, [stdout]);
 
     // Two views over the same alarm list: 'rule' collapses to one row per
     // alarm rule (better for triage), 'instance' shows one row per device
@@ -1086,20 +1099,85 @@ export function OverviewTab({
                             (m) => m.visualization === 'list',
                         );
                         if (listMetrics.length === 0) return null;
-                        // Cap visible buckets per panel so a single huge
-                        // distribution (kernel: 27+) doesn't push every
-                        // following panel off-screen. Scale lightly with
-                        // terminal height; lower bound keeps tiny panels
-                        // usable, upper bound keeps tall ones reasonable.
-                        const totalRows = stdout?.rows ?? 36;
-                        const maxRows = Math.max(
-                            3,
-                            Math.min(
-                                10,
-                                Math.floor((totalRows - 14) / listMetrics.length),
-                            ),
+                        // Two-pass row allocation across distribution
+                        // panels in this column. Each panel pays a fixed
+                        // chrome cost (border + title + gaps ≈ 4 rows);
+                        // reserve ~14 rows up top for dashboard chrome
+                        // and AGENT VERSIONS. Phase 1: every panel that
+                        // fits under fair-share takes exactly its bucket
+                        // count. Phase 2: the leftover budget is split
+                        // among panels that wanted more (kernel) so they
+                        // get the surplus instead of clipping the rest.
+                        const totalRows = terminalRows;
+                        // Per panel: border top + title + marginBottom +
+                        // border bottom = 4 fixed chrome rows. Scrollable
+                        // panels also pay one row for the "↓ N more"
+                        // indicator (and another for "↑ N more" when the
+                        // cursor scrolled past the top), counted below.
+                        const chromePerPanel = 4;
+                        // Dashboard chrome above this column: tabs (1) +
+                        // AGENT VERSIONS panel (~5-6 rows) + footer (1-2)
+                        // + a tiny safety margin.
+                        const reservedTop = 12;
+                        const totalChrome =
+                            reservedTop + listMetrics.length * chromePerPanel;
+                        const budget = Math.max(
+                            listMetrics.length * 2,
+                            totalRows - totalChrome,
                         );
-                        return listMetrics.map((m) => {
+                        const fairShare = Math.max(
+                            2,
+                            Math.floor(budget / listMetrics.length),
+                        );
+                        const counts = listMetrics.map((m) => {
+                            const k = `${m.product}:${m.name}`;
+                            const v = productMetrics.values[k];
+                            return v && typeof v === 'object'
+                                ? Object.keys(v).length
+                                : 0;
+                        });
+                        const allocated = counts.map((c) =>
+                            c > 0 && c <= fairShare ? c : null,
+                        );
+                        const usedSoFar = allocated.reduce(
+                            (acc, n) => acc + (n || 0),
+                            0,
+                        );
+                        const greedy = allocated
+                            .map((n, i) => (n === null ? i : -1))
+                            .filter((i) => i >= 0);
+                        // Each greedy panel pays one extra row for its
+                        // "↓ N more" indicator inside the content area;
+                        // shrink the leftover budget by that overhead so
+                        // those panels don't push past the column.
+                        const greedyOverhead = greedy.length;
+                        const leftover = Math.max(
+                            0,
+                            budget - usedSoFar - greedyOverhead,
+                        );
+                        // Distribute leftover among greedy panels with the
+                        // floor remainder spread across the first few so
+                        // we don't leave empty rows at the bottom of the
+                        // column.
+                        const greedyBase = greedy.length
+                            ? Math.floor(leftover / greedy.length)
+                            : 0;
+                        const greedyExtra = greedy.length
+                            ? leftover - greedyBase * greedy.length
+                            : 0;
+                        const greedyByIdx = new Map();
+                        greedy.forEach((idx, gi) => {
+                            greedyByIdx.set(
+                                idx,
+                                Math.max(2, greedyBase + (gi < greedyExtra ? 1 : 0)),
+                            );
+                        });
+                        const maxRowsPer = allocated.map((n, i) =>
+                            n === null
+                                ? greedyByIdx.get(i) || 2
+                                : Math.max(2, n),
+                        );
+                        return listMetrics.map((m, i) => {
                             const k = `${m.product}:${m.name}`;
                             return (
                                 <DistributionPanel
@@ -1110,7 +1188,7 @@ export function OverviewTab({
                                     productInfo={productInfo}
                                     activeMetricKey={metricFilter?.metricKey}
                                     onBucketChange={onMetricFilterChange}
-                                    maxRows={maxRows}
+                                    maxRows={maxRowsPer[i]}
                                 />
                             );
                         });
