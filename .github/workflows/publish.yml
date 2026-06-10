@@ -36,6 +36,13 @@ jobs:
                   node-version: 24
                   registry-url: https://registry.npmjs.org
 
+            # `prepare` (scripts/build-dashboard.mjs) needs esbuild, so the
+            # devDeps must be installed before `npm publish` triggers the
+            # lifecycle hook. `npm ci` keeps it deterministic from the
+            # lockfile.
+            - name: install dependencies
+              run: npm ci
+
             - name: Get tag version
               run: |
                   echo "tag_version=`cat package.json | jq '.version' | tr -d '"'`"  >> $GITHUB_ENV
