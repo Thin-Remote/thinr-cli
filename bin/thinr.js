@@ -6,7 +6,7 @@ import { dirname, resolve } from 'path';
 import { Command } from 'commander';
 import figlet from 'figlet';
 import { accent, info } from '../lib/format.js';
-import { configExists, readConfig, setActiveProfile } from '../lib/config.js';
+import { configExists, getActiveProfile, readConfig, setActiveProfile } from '../lib/config.js';
 import { detectJsonModeFromArgv } from '../lib/output.js';
 
 // Single source of truth for the version: package.json. Avoids the drift
@@ -63,6 +63,25 @@ productCommand(program);
 playbookCommand(program);
 profileCommand(program);
 logoutCommand(program);
+
+program
+    .command('login')
+    .helpGroup('Profile:')
+    .description('Re-authenticate the current profile (renew an expired session)')
+    .action(async () => {
+        try {
+            // Pin the target to the active/default profile by name so the
+            // refreshed credentials overwrite it in place, even when the
+            // profile name differs from the server hostname.
+            const name = getActiveProfile();
+            if (name) setActiveProfile(name);
+            await authenticate();
+            console.log(info('Signed in.'));
+        } catch (error) {
+            console.error(`Error: ${error.message}`);
+            process.exit(1);
+        }
+    });
 
 program
     .command('mcp')

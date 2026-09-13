@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.3.0] - 2026-09-13
+
+### Added
+
+- `thinr login` — re-authenticate the current profile in place, without
+  deleting and recreating it. Renews an expired session in one step and
+  defaults the server prompt to the profile's existing server.
+
+### Changed
+
+- Session-expiry errors now point to the working command: "Session
+  expired. Run `thinr login` to sign in again." (previously suggested
+  `thinr`, which opens the dashboard instead of re-authenticating).
+- More robust token refresh for WebSocket sessions: the interactive
+  console and streaming `exec` now refresh an expired access token
+  before the handshake and retry once on a 401, matching the
+  refresh-on-401 behaviour of HTTP calls.
+
 ## [1.2.0] - 2026-06-10
 
 ### Added
