@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.3] - 2026-09-24
+
+### Changed
+
+- MCP tools take the target device as `device_id`. A tool argument named
+  `device` never reaches this server through Claude Desktop's remote-devices
+  bridge, which claims that name for its own call routing and strips it, so
+  every tool needing a device failed with `device is required` however the
+  caller spelled the call, while tools without one worked. Reproduced on one
+  machine with one binary: a direct JSON-RPC call succeeded, the same call
+  through Claude Desktop arrived without the field, and renaming the argument
+  fixed it with nothing else changed. `device` is no longer accepted.
+
 ## [1.3.2] - 2026-09-24
 
 ### Fixed
