@@ -9,6 +9,8 @@ import {
     listDeviceResourcesWithSchemas,
     readDeviceResource,
 } from '../lib/resource.js';
+import { getDeviceProperties, getDeviceProperty, setDeviceProperty } from '../lib/property.js';
+import { getDeviceStatus } from '../lib/status.js';
 
 const DEVICE = 'edge-gw-17';
 const OWNER = { user: 'acme' };
@@ -23,6 +25,10 @@ function setupBackend() {
     };
     api.post = async (path, body) => {
         calls.push({ method: 'POST', path, body });
+        return { data: { ok: true } };
+    };
+    api.put = async (path, body) => {
+        calls.push({ method: 'PUT', path, body });
         return { data: { ok: true } };
     };
 }
@@ -70,5 +76,35 @@ describe('resource helpers address the requested account', () => {
                 `${call.path} should be addressed to acme`,
             );
         }
+    });
+});
+
+describe('device properties address the requested account', () => {
+    beforeEach(setupBackend);
+
+    it('getDeviceProperties', async () => {
+        await getDeviceProperties(DEVICE, OWNER.user);
+        assert.equal(calls[0].path, `/v3/users/acme/devices/${DEVICE}/properties`);
+    });
+
+    it('getDeviceProperty', async () => {
+        await getDeviceProperty(DEVICE, 'uptime', OWNER.user);
+        assert.equal(calls[0].path, `/v3/users/acme/devices/${DEVICE}/properties/uptime`);
+    });
+
+    it('setDeviceProperty', async () => {
+        await setDeviceProperty(DEVICE, 'uptime', 42, OWNER.user);
+        assert.equal(calls[0].method, 'PUT');
+        assert.equal(calls[0].path, `/v3/users/acme/devices/${DEVICE}/properties/uptime`);
+        assert.deepEqual(calls[0].body, { value: 42 });
+    });
+});
+
+describe('device status addresses the requested account', () => {
+    beforeEach(setupBackend);
+
+    it('getDeviceStatus', async () => {
+        await getDeviceStatus(DEVICE, OWNER.user);
+        assert.equal(calls[0].path, `/v1/users/acme/devices/${DEVICE}/stats`);
     });
 });

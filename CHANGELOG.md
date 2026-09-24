@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.3.2] - 2026-09-24
+
+### Fixed
+
+- Device properties and device status now honour the `user` argument.
+  `thinr_property_get`, `thinr_property_set` and the playbook `property`
+  actions accepted it but addressed the active profile's own account, the
+  same gap fixed for resources in 1.3.1.
+
+### Changed
+
+- Account-scoped API paths are built in one place (`lib/paths.js`): the
+  `/v{1,2,3}/users/{account}` prefixes and the device prefix, all resolving
+  the account through a single `resolveUser`. Five modules carried private
+  copies of the same three lines and four more interpolated the account by
+  hand. A test fails the build if any module starts doing that again, which
+  is what keeps the account from being silently dropped: omitting it
+  produces a URL that works against your own account and only breaks when
+  acting on behalf of another.
+- Not-found errors from properties and status name the account they looked
+  in, matching the resource helpers.
+
 ## [1.3.1] - 2026-09-24
 
 ### Fixed
