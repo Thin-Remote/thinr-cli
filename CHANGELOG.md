@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.5] - 2026-09-24
+
+### Fixed
+
+- `thinr_ls` describes what "/" actually resolves to: the agent process's
+  working directory, which is normally the filesystem root. 1.3.4 said it was
+  a base directory "usually /var/log", which was a stale service definition on
+  one device rather than how installs behave.
+
 ## [1.3.4] - 2026-09-24
 
 ### Fixed
