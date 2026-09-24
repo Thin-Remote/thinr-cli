@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.3.1] - 2026-09-24
+
+### Fixed
+
+- Device resources now honour the `user` argument, so an admin acting on
+  another account reaches that account's devices. `thinr_resource_list`,
+  `thinr_resource_call` and the `thinr_script_*` tools accepted the
+  argument but addressed the active profile's own account, which answered
+  "Device not found"; playbook `resource` and script actions had the same
+  gap. Not-found errors now name the account they looked in.
+
 ## [1.3.0] - 2026-09-13
 
 ### Added
