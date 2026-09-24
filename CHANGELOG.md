@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.3.4] - 2026-09-24
+
+### Fixed
+
+- `thinr_script_delete` resolves the script by the name the agent reports, so
+  both `battery` and `battery.sh` remove the same file. It used to build the
+  path from the argument verbatim, which meant following its own description
+  ("without extension") returned a bare 404. A name that matches nothing now
+  lists the scripts that are registered.
+
+### Changed
+
+- `thinr_script_write` refuses a name that would replace one of the device's
+  built-in resources (`monitoring`, `system`, `cmd`, `update`, `agent`) unless
+  `force: true` is passed. Installing `monitoring.sh` used to shadow the real
+  monitoring resource silently. Its description now also states that the
+  script runs with the agent's privileges, root in a system install.
+- `thinr_devices` shows when each device last changed state: `connected since`
+  for a live one, `offline since` for a dead one. The timestamp was already in
+  the response; finding out whether something dropped minutes or months ago
+  meant a trip to the monitoring history.
+- `thinr_ls` explains that `/` resolves to the agent's base directory while
+  every other absolute path is literal, and a listing of `/` now says which
+  directory it came from. Nothing is confined to that directory, so reading a
+  `/` listing as the root filesystem was an easy wrong conclusion to draw.
+- `thinr_profiles` states that profiles are not accounts, and that `user`
+  addresses another account on the same server.
+
 ## [1.3.3] - 2026-09-24
 
 ### Changed
