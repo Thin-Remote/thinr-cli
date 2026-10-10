@@ -4,8 +4,8 @@
 
 Incompatible change of the MCP tool names: the generic tools now come from
 `@thinger-io/cli-core` 0.2.0, and thinr's own tools follow its naming rule
-`<object>[_<subobject>]_<verb>`. From 86 tools to 63, and from about 29,000
-to about 17,100 tokens in `tools/list`.
+`<object>[_<subobject>]_<verb>`. From 86 tools to 60, and from about 29,000
+to about 16,900 tokens in `tools/list`.
 
 ### Changed
 
