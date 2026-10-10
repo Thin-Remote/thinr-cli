@@ -35,36 +35,36 @@ has; `product_playbook_delete` removes one (index entry, then file).
 name: nginx-config
 description: Deploy nginx.conf and reload
 target:
-  product: web_gateways      # or devices: [gw1, gw2]; group: madrid narrows
-  concurrency: 10            # parallel devices (playbook_run)
-  fail_fast: false
+    product: web_gateways # or devices: [gw1, gw2]; group: madrid narrows
+    concurrency: 10 # parallel devices (playbook_run)
+    fail_fast: false
 vars:
-  port:
-    default: 8080
-    type: number
-    description: Listening port
-  release:
-    type: string
-    required: true           # must be given at run time
+    port:
+        default: 8080
+        type: number
+        description: Listening port
+    release:
+        type: string
+        required: true # must be given at run time
 steps:
-  - name: Write config to a temp file
-    action: write
-    path: /tmp/nginx.conf
-    content: |
-      server { listen {{ port }}; }
-  - name: Check it
-    action: exec
-    command: nginx -t -c /tmp/nginx.conf
-    register: check
-  - name: Move it into place
-    action: mv
-    source: /tmp/nginx.conf
-    destination: /etc/nginx/nginx.conf
-    overwrite: true
-    when: check.ok
-  - name: Reload
-    action: exec
-    command: systemctl reload nginx
+    - name: Write config to a temp file
+      action: write
+      path: /tmp/nginx.conf
+      content: |
+          server { listen {{ port }}; }
+    - name: Check it
+      action: exec
+      command: nginx -t -c /tmp/nginx.conf
+      register: check
+    - name: Move it into place
+      action: mv
+      source: /tmp/nginx.conf
+      destination: /etc/nginx/nginx.conf
+      overwrite: true
+      when: check.ok
+    - name: Reload
+      action: exec
+      command: systemctl reload nginx
 ```
 
 - `vars`: plain (`port: 8080`) or extended (`default`, `type` string |
@@ -75,26 +75,26 @@ steps:
   they never change the stored playbook.
 - Step fields: `name`, `action`, the action's parameters, and optionally
   `when` (skip unless true), `register` (expose `{ ok, result | error,
-  duration_ms }` to later steps), `pause_after` (seconds).
+duration_ms }` to later steps), `pause_after` (seconds).
 - `when` syntax: `==`, `!=`, `>`, `<`, `>=`, `<=`, `and`, `or`, `not`,
   parentheses, quoted strings, numbers, `true` / `false` / `null`, dotted
   paths (`check.ok`, `agent.version`).
 
 Actions:
 
-| Action | Parameters (* required) | Does |
-|---|---|---|
-| `exec` | `command`*, `timeout` | runs a shell command; non-zero exit fails the step |
-| `write` | `path`*, `content`* | writes inline content |
-| `push` / `pull` | `source`*, `destination`* | copies a file from / to the machine running the playbook |
-| `mkdir` | `path`* | creates a directory |
-| `mv` | `source`*, `destination`*, `overwrite` | moves; write to a temp file then `mv` for atomic deploys |
-| `rm` | `path`*, `recursive` | deletes |
-| `property_set` | `property`*, `value`* | sets a device property |
-| `resource` | `resource`*, `inputs` | calls a device resource |
-| `script_install` / `script_delete` | `name`*, `content` or `content_file` | installs or removes a device script |
-| `update` | `op`*, `channel` | checks for or applies an agent update |
-| `sleep` | `seconds`* | waits |
+| Action                             | Parameters (\* required)               | Does                                                     |
+| ---------------------------------- | -------------------------------------- | -------------------------------------------------------- |
+| `exec`                             | `command`\*, `timeout`                 | runs a shell command; non-zero exit fails the step       |
+| `write`                            | `path`_, `content`_                    | writes inline content                                    |
+| `push` / `pull`                    | `source`_, `destination`_              | copies a file from / to the machine running the playbook |
+| `mkdir`                            | `path`\*                               | creates a directory                                      |
+| `mv`                               | `source`_, `destination`_, `overwrite` | moves; write to a temp file then `mv` for atomic deploys |
+| `rm`                               | `path`\*, `recursive`                  | deletes                                                  |
+| `property_set`                     | `property`_, `value`_                  | sets a device property                                   |
+| `resource`                         | `resource`\*, `inputs`                 | calls a device resource                                  |
+| `script_install` / `script_delete` | `name`\*, `content` or `content_file`  | installs or removes a device script                      |
+| `update`                           | `op`\*, `channel`                      | checks for or applies an agent update                    |
+| `sleep`                            | `seconds`\*                            | waits                                                    |
 
 `check` cannot predict `exec` or `resource` steps: they report `unknown`.
 

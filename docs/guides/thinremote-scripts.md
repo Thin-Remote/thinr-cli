@@ -9,13 +9,13 @@ Tool names below omit the `thinr_` prefix.
 
 ## Device scripts or product scripts
 
-| | Device script | Product script |
-|---|---|---|
-| Lives in | the device: `<agent base>/scripts/` | the product's file storage: `scripts/` |
-| Reaches | that device | every device of the product, current and future |
-| Changing it | one write per device | one write, effective on the next call everywhere |
-| Tools | `device_script_list`, `device_script_write`, `device_script_delete` | `product_script_list`, `product_script_read`, `product_script_write`, `product_script_delete` |
-| Called with | `device_resource_call` on that device | `device_resource_call` on any device of the product |
+|             | Device script                                                       | Product script                                                                                |
+| ----------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Lives in    | the device: `<agent base>/scripts/`                                 | the product's file storage: `scripts/`                                                        |
+| Reaches     | that device                                                         | every device of the product, current and future                                               |
+| Changing it | one write per device                                                | one write, effective on the next call everywhere                                              |
+| Tools       | `device_script_list`, `device_script_write`, `device_script_delete` | `product_script_list`, `product_script_read`, `product_script_write`, `product_script_delete` |
+| Called with | `device_resource_call` on that device                               | `device_resource_call` on any device of the product                                           |
 
 Prefer **product scripts** for fleets: the code is downloaded on each call,
 so there is nothing to deploy and no drift between devices. Use a device
@@ -54,12 +54,12 @@ Contract:
 
 Choose the resource shape with `input` and `output`:
 
-| Shape | `input` | `output` | Example | Console shows |
-|---|---|---|---|---|
-| output only | omit | true | stats, status | the output |
-| input and output | `{field: default}` | true | transform, query | an input form and the output |
-| input only | `{field: default}` | false | notify, log | an input form; the call replies empty |
-| run | omit | false | ping, restart | a button |
+| Shape            | `input`            | `output` | Example          | Console shows                         |
+| ---------------- | ------------------ | -------- | ---------------- | ------------------------------------- |
+| output only      | omit               | true     | stats, status    | the output                            |
+| input and output | `{field: default}` | true     | transform, query | an input form and the output          |
+| input only       | `{field: default}` | false    | notify, log      | an input form; the call replies empty |
+| run              | omit               | false    | ping, restart    | a button                              |
 
 `input` maps field names (`^[A-Za-z_][A-Za-z0-9_]*$`) to default values
 (string, number or boolean), e.g. `{"threshold": 80, "label": "warm"}`: the

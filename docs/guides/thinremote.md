@@ -21,16 +21,16 @@ before assuming write access to system paths.
 
 What the agent exposes, and the tool for each:
 
-| Need | Tool |
-|---|---|
-| Run a shell command | `device_exec` (stdout, stderr, exit code; `timeout` in s) |
-| Read / write / list / move / delete files | `device_file_read`, `device_file_write`, `device_file_list`, `device_file_move`, `device_file_delete`, `device_dir_create` |
-| Copy binaries or big files from/to this machine | `device_files_push`, `device_files_pull` |
-| CPU, memory, disk, network, load: now or history | `device_monitoring_get` |
-| A reusable, typed operation on one device | `device_script_write` (see `thinremote-scripts`) |
-| Call what the agent or a script exposes | `device_resource_list`, `device_resource_call` |
-| Update the agent | `device_agent_update` |
-| Install the agent on a new machine | `agent_install_get` (a shell one-liner) |
+| Need                                             | Tool                                                                                                                       |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Run a shell command                              | `device_exec` (stdout, stderr, exit code; `timeout` in s)                                                                  |
+| Read / write / list / move / delete files        | `device_file_read`, `device_file_write`, `device_file_list`, `device_file_move`, `device_file_delete`, `device_dir_create` |
+| Copy binaries or big files from/to this machine  | `device_files_push`, `device_files_pull`                                                                                   |
+| CPU, memory, disk, network, load: now or history | `device_monitoring_get`                                                                                                    |
+| A reusable, typed operation on one device        | `device_script_write` (see `thinremote-scripts`)                                                                           |
+| Call what the agent or a script exposes          | `device_resource_list`, `device_resource_call`                                                                             |
+| Update the agent                                 | `device_agent_update`                                                                                                      |
+| Install the agent on a new machine               | `agent_install_get` (a shell one-liner)                                                                                    |
 
 Paths are absolute on the device. `/` on its own lists the agent's working
 directory (normally the root, reported as `fs_base_path`); nothing is
@@ -48,12 +48,12 @@ products are created with `resource_create` type `product` and come with
 device's `monitoring` resource every 60 s (what `device_monitoring_get`
 reads as history). On top of the server's product, ThinRemote keeps:
 
-| Piece | Where it lives | Tools |
-|---|---|---|
-| Product scripts: code run on any device of the product, kept in one place | file storage named like the product, `scripts/`; one product API resource per script | `product_script_*` (see `thinremote-scripts`) |
-| Playbooks: ordered steps rolled out across devices | same storage, `playbooks/<name>.yaml`, indexed in the `playbooks` product property | `product_playbook_*`, `playbook_*` (see `thinremote-playbooks`) |
-| Dashboard metrics | `dashboard_metrics` product property | `product_metric_*` (see `thinremote-product-dashboard`) |
-| Log sources | `logs` product property | `product_logs_*` (see `thinremote-product-dashboard`) |
+| Piece                                                                     | Where it lives                                                                       | Tools                                                           |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| Product scripts: code run on any device of the product, kept in one place | file storage named like the product, `scripts/`; one product API resource per script | `product_script_*` (see `thinremote-scripts`)                   |
+| Playbooks: ordered steps rolled out across devices                        | same storage, `playbooks/<name>.yaml`, indexed in the `playbooks` product property   | `product_playbook_*`, `playbook_*` (see `thinremote-playbooks`) |
+| Metrics for thinr's terminal dashboard                                    | `dashboard_metrics` product property                                                 | `product_metric_*` (see `thinremote-metrics-logs`)              |
+| Log sources for thinr (dashboard, `thinr device logs`)                    | `logs` product property                                                              | `product_logs_*` (see `thinremote-metrics-logs`)                |
 
 Deleting a product with `resource_delete` also deletes its file storage (its
 scripts and playbooks).
@@ -64,14 +64,14 @@ Devices join a product when they are created with `product`, with
 
 ## Fleet operations
 
-| Need | Tool |
-|---|---|
-| Same command on every device, once | `product_exec` (parallel, per-device result, `concurrency`, `fail_fast`) |
-| Same file on every device | `product_write` |
+| Need                                       | Tool                                                                              |
+| ------------------------------------------ | --------------------------------------------------------------------------------- |
+| Same command on every device, once         | `product_exec` (parallel, per-device result, `concurrency`, `fail_fast`)          |
+| Same file on every device                  | `product_write`                                                                   |
 | A repeatable, versioned change with checks | a playbook: `product_playbook_run` on one device, then `product_playbook_rollout` |
-| A value from every device | a product script + `device_resource_call` per device, or a metric |
-| Which devices are online | `resource_list` type `device` with `filter: {"product": "<id>"}` |
-| Fleet health at a glance | `device_monitoring_get` without `device` (one row per device) |
+| A value from every device                  | a product script + `device_resource_call` per device, or a metric                 |
+| Which devices are online                   | `resource_list` type `device` with `filter: {"product": "<id>"}`                  |
+| Fleet health at a glance                   | `device_monitoring_get` without `device` (one row per device)                     |
 
 Offline devices are skipped by fleet tools unless asked (`all` /
 `include_offline`).
@@ -86,7 +86,8 @@ device appears (autoprovisioned or created) → `resource_update` its
 **Expose a health check for the whole fleet.** Write it once as a product
 script (`product_script_write`, output-only, JSON on stdout) → call it on a
 device with `device_resource_call` to check it → register a metric over it
-(`product_metric_write`) so the product dashboard aggregates it.
+(`product_metric_write`) so thinr's dashboard aggregates it across the
+fleet.
 
 **Change a config file on every machine, safely.** Write a playbook
 (`playbook_describe` → draft → `playbook_validate`) that writes the file and
@@ -96,4 +97,5 @@ with a small `batch_size`.
 
 **Investigate one machine.** `resource_get` (agent info) →
 `device_monitoring_get` (`realtime: true`) → `device_exec` for specifics →
-`device_file_read` for logs, or the product's log sources from the console.
+`device_file_read` for log files, or the product's log sources with
+`thinr device logs`.

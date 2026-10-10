@@ -46,7 +46,7 @@ to about 17,100 tokens in `tools/list`.
 - Guides for agents, shipped with the CLI and served by `thinr_doc_read`
   and as MCP resources (`docs/guides/`): `thinremote` (the agent, products,
   which tool for each need, recipes), `thinremote-scripts`,
-  `thinremote-playbooks`, `thinremote-product-dashboard`. Tool descriptions
+  `thinremote-playbooks`, `thinremote-metrics-logs`. Tool descriptions
   are now short and point at them.
 - MCP server instructions: read the guide first, confirm fleet changes.
 - `thinr login --server --username --token` signs in without prompts; a
