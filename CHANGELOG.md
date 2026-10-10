@@ -1,14 +1,39 @@
 # Changelog
 
-## [Unreleased]
+## [1.4.0] - Unreleased
+
+Incompatible change of the MCP tool names: the generic tools now come from
+`@thinger-io/cli-core` 0.2.0, and thinr's own tools follow its naming rule
+`<object>[_<subobject>]_<verb>`. From 86 tools to 63, and from about 29,000
+to about 20,500 tokens in `tools/list`.
 
 ### Changed
 
 - The generic core (API client, auth, profiles, REST helpers, generic
   commands and MCP tools) now comes from `@thinger-io/cli-core`, shared with
   the `thinger` CLI. thinr supplies its identity (`lib/identity.js`) and
-  its own commands and tools on top. Profiles, `THINR_*` variables and tool
-  names are unchanged.
+  its own commands and tools on top. Profiles and `THINR_*` variables are
+  unchanged.
+- Server resources (devices, products, buckets, tokens, alarms, properties,
+  product profiles…) are reached through `thinr_resource_list` / `_get` /
+  `_create` / `_update` / `_delete` / `_clone` with a `type`, described by
+  `thinr_resource_describe`; device resources through
+  `thinr_device_resource_list` / `_call`. See the cli-core changelog for
+  the generic tools.
+- thinr's tools renamed: `exec` → `device_exec`, `update` →
+  `device_agent_update`, `monitoring` → `device_monitoring_get`, `read` /
+  `write` / `ls` / `rm` / `mv` → `device_file_read` / `_write` / `_list` /
+  `_delete` / `_move`, `mkdir` → `device_dir_create`, `push` / `pull` →
+  `device_files_push` / `_pull`, `script_*` → `device_script_*`,
+  `agent_install_command` → `agent_install_get`, `playbook_schema` →
+  `playbook_describe`, `product_metric_set` → `product_metric_write` (all
+  with the `thinr_` prefix).
+- `thinr_device_info` is gone: `thinr_resource_get` with type `device` adds
+  what the agent reports (system info, filesystem base path) when the device
+  is connected; live metrics are in `thinr_device_monitoring_get`.
+- `thinr_product_delete` is gone: `thinr_resource_delete` with type
+  `product` also deletes the product's script storage (there is no longer a
+  `keep_storage` option). `thinr product delete` deletes the product only.
 - MCP calls with a `profile` argument are scoped to that call, so
   concurrent calls against different profiles no longer share the server
   or token.
@@ -22,7 +47,9 @@
   prompt with no terminal fails with a clear message.
 - `thinr device info`, `create`, `set-product`, `property-set`;
   `thinr product info`, `create`, `delete`; `thinr bucket list`, `read`.
-- MCP: `thinr_device_create` and `thinr_buckets`.
+- From cli-core: `thinr_dashboard_publish`, `thinr_doc_read`, bucket data,
+  storage files, endpoints, alarm rule tests…, and the server's
+  documentation as MCP resources.
 - Servers may be given as URLs (`http://localhost:8080`).
 
 ## [1.3.5] - 2026-09-24

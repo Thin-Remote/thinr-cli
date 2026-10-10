@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildTools } from '@thinger-io/cli-core/mcp/registry';
 import { tools as thinrTools } from '../lib/mcp/registry.js';
+import { resourceHooks } from '../lib/mcp/resource-hooks.js';
 
 // What the MCP server serves: the generic tools of the core plus thinr's.
 const tools = buildTools(thinrTools);
@@ -10,10 +11,17 @@ const tools = buildTools(thinrTools);
 describe('mcp registry', () => {
     it("serves the generic tools and thinr's own", () => {
         const names = new Set(tools.map((t) => t.name));
-        for (const name of ['thinr_devices', 'thinr_bucket_read', 'thinr_token_list']) {
+        for (const name of ['thinr_resource_list', 'thinr_bucket_data_read', 'thinr_doc_read']) {
             assert.ok(names.has(name), `generic ${name} missing`);
         }
-        for (const name of ['thinr_exec', 'thinr_ls', 'thinr_playbook_run', 'thinr_monitoring']) {
+        for (const name of [
+            'thinr_device_exec',
+            'thinr_device_file_list',
+            'thinr_device_monitoring_get',
+            'thinr_device_script_write',
+            'thinr_playbook_run',
+            'thinr_product_metric_write',
+        ]) {
             assert.ok(names.has(name), `thinr ${name} missing`);
         }
     });
@@ -33,13 +41,19 @@ describe('mcp registry', () => {
         for (const name of names) assert.match(name, /^thinr_[a-z0-9_]+$/);
     });
 
-    it("thinr's agent-aware tools replace the generic ones", () => {
-        const info = tools.filter((t) => t.name === 'thinr_device_info');
-        assert.equal(info.length, 1);
-        assert.match(info[0].description, /hostname/);
-        const del = tools.filter((t) => t.name === 'thinr_product_delete');
-        assert.equal(del.length, 1);
-        assert.ok(del[0].inputSchema.properties.keep_storage);
+    // ThinRemote adds to the generic tools through hooks, not by replacing
+    // them: a device read also asks its agent, a product delete also drops
+    // its script storage.
+    it('extends the generic device and product tools through hooks', () => {
+        assert.equal(typeof resourceHooks.device.afterGet, 'function');
+        assert.equal(typeof resourceHooks.product.afterDelete, 'function');
+        assert.ok(!tools.some((t) => /^thinr_(device_info|product_delete)$/.test(t.name)));
+    });
+
+    it("thinr's own names follow <object>[_<sub>]_<verb>", () => {
+        const verbs =
+            /_(list|get|describe|create|update|delete|clone|call|read|write|send|exec|move|push|pull|run|validate|rollout|publish|add|remove|presets|default)$/;
+        for (const t of thinrTools) assert.match(t.name, verbs, t.name);
     });
 
     it('every required field is declared in properties', () => {
@@ -55,9 +69,9 @@ describe('mcp registry', () => {
         }
     });
 
-    it('every tool (except thinr_profiles) has the injected `profile` option', () => {
+    it('every tool (except thinr_profile_list) has the injected `profile` option', () => {
         for (const t of tools) {
-            if (t.name === 'thinr_profiles') continue;
+            if (t.name === 'thinr_profile_list') continue;
             assert.ok(
                 t.inputSchema.properties?.profile,
                 `${t.name} is missing the injected profile param`,

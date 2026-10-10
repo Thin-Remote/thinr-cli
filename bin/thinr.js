@@ -11,6 +11,7 @@ import { configExists } from '@thinger-io/cli-core/config';
 import { accent, info } from '@thinger-io/cli-core/format';
 import { thinrIdentity } from '../lib/identity.js';
 import { tools as mcpTools } from '../lib/mcp/registry.js';
+import { resourceHooks } from '../lib/mcp/resource-hooks.js';
 import { registerDeviceCommands } from '../commands/device/index.js';
 import { registerProductCommands } from '../commands/product/index.js';
 import { fleetCommand } from '../commands/fleet/index.js';
@@ -34,6 +35,7 @@ defineIdentity(thinrIdentity);
 await runCli({
     version: pkg.version,
     mcpTools,
+    resourceHooks,
     register(program, groups) {
         registerDeviceCommands(groups.device);
         registerProductCommands(groups.product);
