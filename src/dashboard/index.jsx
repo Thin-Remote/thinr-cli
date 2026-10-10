@@ -6,7 +6,7 @@ import {
     listProfiles,
     getActiveProfile,
     setActiveProfile,
-} from '../../lib/config.js';
+} from '@thinger-io/cli-core/config';
 import { connectToDeviceConsole } from '../../lib/console.js';
 
 const ENTER_ALT_SCREEN = '\x1b[?1049h';

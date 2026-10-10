@@ -7,7 +7,7 @@ import {
 import {
     listStorageFiles,
     readStorageFile,
-} from '../../../lib/storage.js';
+} from '@thinger-io/cli-core/storage';
 import { parsePlaybook } from '../../../lib/playbook/loader.js';
 import { debugCount, debugLog } from '../../../lib/debug-log.js';
 

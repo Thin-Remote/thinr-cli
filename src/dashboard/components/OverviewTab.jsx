@@ -12,7 +12,7 @@ import {
     deviceKindCounts,
     UNASSIGNED_PRODUCT_KEY,
 } from '../lib/status.js';
-import { ALARM_SEVERITY, ALARM_STATE } from '../../../lib/alarms.js';
+import { ALARM_SEVERITY, ALARM_STATE } from '@thinger-io/cli-core/alarms';
 import { useFocusable, useTabCycle } from '../lib/focus.js';
 
 const FLEET_HINT = [

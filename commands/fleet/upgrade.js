@@ -1,6 +1,6 @@
 // @ts-check
 import { confirm } from '@inquirer/prompts';
-import { getDevices } from '../../lib/devices.js';
+import { getDevices } from '@thinger-io/cli-core/devices';
 import { getMonitoringData } from '../../lib/monitoring.js';
 import { fetchLatestAgentVersion } from '../../lib/agent-releases.js';
 import { runFleetUpgrade, summarize } from '../../lib/fleet-upgrade.js';
@@ -11,7 +11,7 @@ import {
     printErr,
     createSpinner,
     classifyError,
-} from '../../lib/output.js';
+} from '@thinger-io/cli-core/output';
 import {
     success,
     error as errorStyle,
@@ -20,7 +20,7 @@ import {
     label,
     muted,
     accent,
-} from '../../lib/format.js';
+} from '@thinger-io/cli-core/format';
 import {
     applyJsonFlag,
     ensureConfigured,

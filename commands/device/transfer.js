@@ -5,8 +5,8 @@ import { Transform } from 'node:stream';
 import { basename } from 'path';
 import cliProgress from 'cli-progress';
 import { createDeviceAPI } from '../../lib/device-api.js';
-import { isJsonMode, printOk, printErr, classifyError } from '../../lib/output.js';
-import { success, hint, formatBytes, formatETA } from '../../lib/format.js';
+import { isJsonMode, printOk, printErr, classifyError } from '@thinger-io/cli-core/output';
+import { success, hint, formatBytes, formatETA } from '@thinger-io/cli-core/format';
 import { applyJsonFlag, ensureConfigured, getGlobalUser } from './_shared.js';
 
 /**

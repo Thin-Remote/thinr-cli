@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { runPlaybook } from '../../../lib/playbook/runner.js';
 import { DEFAULT_FAILURE_THRESHOLD, runFleetPlaybook } from '../../../lib/playbook/fleet.js';
 import { uploadFleetRunReport } from '../../../lib/product.js';
-import { readConfig } from '../../../lib/config.js';
+import { readConfig } from '@thinger-io/cli-core/config';
 
 const DEFAULT_BATCH_SIZE = 5;
 

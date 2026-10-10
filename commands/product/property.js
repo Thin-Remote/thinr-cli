@@ -1,14 +1,14 @@
 // @ts-check
-import { formatDeviceProperty, getDeviceProperty } from '../../lib/property.js';
-import { filterActiveDevices } from '../../lib/devices.js';
-import { error as errorStyle, info } from '../../lib/format.js';
+import { formatDeviceProperty, getDeviceProperty } from '@thinger-io/cli-core/property';
+import { filterActiveDevices } from '@thinger-io/cli-core/devices';
+import { error as errorStyle, info } from '@thinger-io/cli-core/format';
 import {
     isJsonMode,
     printOk,
     printErr,
     createSpinner,
     classifyError,
-} from '../../lib/output.js';
+} from '@thinger-io/cli-core/output';
 import {
     applyJsonFlag,
     ensureConfigured,

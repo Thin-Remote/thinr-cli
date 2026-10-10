@@ -7,8 +7,8 @@ import {
     removeLogSource,
     setDefaultLogSource,
 } from '../../lib/product/logs.js';
-import { hint, info, label, muted, success } from '../../lib/format.js';
-import { classifyError, isJsonMode, printErr, printOk } from '../../lib/output.js';
+import { hint, info, label, muted, success } from '@thinger-io/cli-core/format';
+import { classifyError, isJsonMode, printErr, printOk } from '@thinger-io/cli-core/output';
 import { applyJsonFlag, ensureConfigured, getGlobalUser } from '../_shared.js';
 
 function truncate(value, max = 60) {

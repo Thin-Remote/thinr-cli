@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getProductProperty } from '../../../lib/product.js';
+import { getProductProperty } from '@thinger-io/cli-core/product';
 import { debugCount, debugLog } from '../../../lib/debug-log.js';
 import { eventStream } from '../../../lib/dashboard/event-stream.js';
 import { aggregate, getPath } from '../../../lib/dashboard/metric-aggregate.js';

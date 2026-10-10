@@ -1,14 +1,14 @@
 // @ts-check
-import { callDeviceResource } from '../../lib/resource.js';
-import { filterActiveDevices } from '../../lib/devices.js';
-import { error as errorStyle, info } from '../../lib/format.js';
+import { callDeviceResource } from '@thinger-io/cli-core/resource';
+import { filterActiveDevices } from '@thinger-io/cli-core/devices';
+import { error as errorStyle, info } from '@thinger-io/cli-core/format';
 import {
     isJsonMode,
     printOk,
     printErr,
     createSpinner,
     classifyError,
-} from '../../lib/output.js';
+} from '@thinger-io/cli-core/output';
 import {
     applyJsonFlag,
     collectInput,

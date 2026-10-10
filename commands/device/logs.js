@@ -1,10 +1,10 @@
 // @ts-check
 import { createDeviceAPI } from '../../lib/device-api.js';
-import { getDevice } from '../../lib/devices.js';
+import { getDevice } from '@thinger-io/cli-core/devices';
 import { getProductLogs } from '../../lib/product/logs.js';
-import { inputError } from '../../lib/errors.js';
-import { isJsonMode, printOk, printErr, classifyError } from '../../lib/output.js';
-import { error as errorStyle, muted, warning } from '../../lib/format.js';
+import { inputError } from '@thinger-io/cli-core/errors';
+import { isJsonMode, printOk, printErr, classifyError } from '@thinger-io/cli-core/output';
+import { error as errorStyle, muted, warning } from '@thinger-io/cli-core/format';
 import { applyJsonFlag, ensureConfigured, getGlobalUser } from './_shared.js';
 
 // Single-quote for /bin/sh: wrap in '…' and escape embedded single quotes.

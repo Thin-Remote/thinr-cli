@@ -159,6 +159,19 @@ thinr device list --json             # JSON envelope with the raw API records
 
 Combine with the global `-u, --user` flag for admin impersonation.
 
+#### Records — `info` / `create` / `delete` / `set-product`
+
+```bash
+thinr device info <deviceId>                       # server record as JSON
+thinr device create <deviceId> [-t Generic|MQTT|HTTP|Virtual|Subdevice] [-p product]
+thinr device delete <deviceId> [-y]
+thinr device set-product <deviceId> <productId>    # "" to unassign
+thinr device property-set <deviceId> <property> <json>
+```
+
+`create` generates random credentials for Generic/MQTT devices unless
+`-c` is given; they are shown once.
+
 #### `console`
 
 Open an interactive terminal on the device:
@@ -417,13 +430,17 @@ thinr profile delete <name> [--json]
 
 ### `thinr logout`
 
-Remove the active profile's credentials and config:
+Forget the active profile and revoke the API token `thinr` created for it
+at a username/password login:
 
 ```bash
-thinr logout
+thinr logout                 # active profile (or --profile <name>)
+thinr logout --all           # every profile
+thinr logout --keep-token    # leave the token on the server
 ```
 
-Other profiles are left untouched.
+Other profiles are left untouched. `thinr login` re-authenticates the
+active profile; `--server`, `--username` and `--token` skip the prompts.
 
 ---
 
@@ -456,25 +473,25 @@ Grouped by capability. Every tool accepts optional `device` (when
 relevant), `user` and `profile` arguments, so a single session can
 target any device, account or environment without restart.
 
-| Area                         | Tools                                                                                                                                                                                                                |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Discovery                    | `thinr_devices` (with optional `query` for regex filtering), `thinr_device_info`, `thinr_profiles`                                                                                                                   |
-| Provisioning and lifecycle   | `thinr_agent_install_command`, `thinr_device_set_product`, `thinr_device_delete`                                                                                                                                     |
-| Shell                        | `thinr_exec` (buffered), with streaming stdout/stderr                                                                                                                                                                |
-| Filesystem                   | `thinr_read`, `thinr_write`, `thinr_push`, `thinr_pull`, `thinr_ls`, `thinr_mkdir`, `thinr_rm`, `thinr_mv`                                                                                                           |
-| Resources                    | `thinr_resource_list` (with `in`/`out` schemas), `thinr_resource_call`                                                                                                                                               |
-| Properties (device)          | `thinr_property_get`, `thinr_property_set`                                                                                                                                                                           |
-| Scripts (device)             | `thinr_script_list`, `thinr_script_write`, `thinr_script_delete`                                                                                                                                                     |
-| Monitoring and agent updates | `thinr_monitoring`, `thinr_bucket_read`, `thinr_update`                                                                                                                                                              |
-| Alarms                       | `thinr_alarm_instances`, `thinr_alarm_instance_stats`, `thinr_alarm_instance_get`, `thinr_alarm_instance_update`, `thinr_alarm_instance_delete`, `thinr_alarm_rules`, `thinr_alarm_rule_read/write/delete`           |
-| Access tokens                | User: `thinr_token_list`, `thinr_token_get`, `thinr_token_create`, `thinr_token_update`, `thinr_token_delete`. Device: `thinr_device_token_list`, `thinr_device_token_create`, `thinr_device_token_delete`           |
-| Products                     | `thinr_products`, `thinr_product_create`, `thinr_product_update`, `thinr_product_delete`, `thinr_product_exec`, `thinr_product_write`                                                                                |
-| Product scripts              | `thinr_product_script_list`, `thinr_product_script_read`, `thinr_product_script_write`, `thinr_product_script_delete`                                                                                                |
-| Product properties           | `thinr_product_property_get`, `thinr_product_property_set`, `thinr_product_property_delete`                                                                                                                          |
-| Product profile schema       | `thinr_product_profile_api_{list,get,set,delete}`, `thinr_product_profile_bucket_{list,get,set,delete}`, `thinr_product_profile_property_{list,get,set,delete}`                                                      |
-| Product log sources          | `thinr_product_logs_list`, `thinr_product_logs_add`, `thinr_product_logs_remove`, `thinr_product_logs_presets`, `thinr_product_logs_set_default`                                                                     |
-| Product metrics              | `thinr_product_metric_list`, `thinr_product_metric_set`, `thinr_product_metric_delete`                                                                                                                               |
-| Playbooks (authoring)        | `thinr_playbook_schema`, `thinr_playbook_validate`, `thinr_playbook_run` (ad-hoc)                                                                                                                                    |
+| Area                         | Tools                                                                                                                                                                                                                 |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Discovery                    | `thinr_devices` (with optional `query` for regex filtering), `thinr_device_info`, `thinr_profiles`                                                                                                                    |
+| Provisioning and lifecycle   | `thinr_agent_install_command`, `thinr_device_set_product`, `thinr_device_delete`                                                                                                                                      |
+| Shell                        | `thinr_exec` (buffered), with streaming stdout/stderr                                                                                                                                                                 |
+| Filesystem                   | `thinr_read`, `thinr_write`, `thinr_push`, `thinr_pull`, `thinr_ls`, `thinr_mkdir`, `thinr_rm`, `thinr_mv`                                                                                                            |
+| Resources                    | `thinr_resource_list` (with `in`/`out` schemas), `thinr_resource_call`                                                                                                                                                |
+| Properties (device)          | `thinr_property_get`, `thinr_property_set`                                                                                                                                                                            |
+| Scripts (device)             | `thinr_script_list`, `thinr_script_write`, `thinr_script_delete`                                                                                                                                                      |
+| Monitoring and agent updates | `thinr_monitoring`, `thinr_bucket_read`, `thinr_update`                                                                                                                                                               |
+| Alarms                       | `thinr_alarm_instances`, `thinr_alarm_instance_stats`, `thinr_alarm_instance_get`, `thinr_alarm_instance_update`, `thinr_alarm_instance_delete`, `thinr_alarm_rules`, `thinr_alarm_rule_read/write/delete`            |
+| Access tokens                | User: `thinr_token_list`, `thinr_token_get`, `thinr_token_create`, `thinr_token_update`, `thinr_token_delete`. Device: `thinr_device_token_list`, `thinr_device_token_create`, `thinr_device_token_delete`            |
+| Products                     | `thinr_products`, `thinr_product_create`, `thinr_product_update`, `thinr_product_delete`, `thinr_product_exec`, `thinr_product_write`                                                                                 |
+| Product scripts              | `thinr_product_script_list`, `thinr_product_script_read`, `thinr_product_script_write`, `thinr_product_script_delete`                                                                                                 |
+| Product properties           | `thinr_product_property_get`, `thinr_product_property_set`, `thinr_product_property_delete`                                                                                                                           |
+| Product profile schema       | `thinr_product_profile_api_{list,get,set,delete}`, `thinr_product_profile_bucket_{list,get,set,delete}`, `thinr_product_profile_property_{list,get,set,delete}`                                                       |
+| Product log sources          | `thinr_product_logs_list`, `thinr_product_logs_add`, `thinr_product_logs_remove`, `thinr_product_logs_presets`, `thinr_product_logs_set_default`                                                                      |
+| Product metrics              | `thinr_product_metric_list`, `thinr_product_metric_set`, `thinr_product_metric_delete`                                                                                                                                |
+| Playbooks (authoring)        | `thinr_playbook_schema`, `thinr_playbook_validate`, `thinr_playbook_run` (ad-hoc)                                                                                                                                     |
 | Product playbooks            | `thinr_product_playbook_list`, `thinr_product_playbook_read`, `thinr_product_playbook_write`, `thinr_product_playbook_run` (single device), `thinr_product_playbook_rollout` (fleet), `thinr_product_playbook_delete` |
 
 Full input/output schemas are published via standard MCP
@@ -625,12 +642,20 @@ Use `thinr profile use <name>` to change the persisted default, or
 ```
 thinr-cli/
 ├── bin/           # CLI entry point (thinr)
-├── commands/      # Commander subcommand modules
-├── lib/           # Core: api, auth, config, device-api, errors,
-│                  # output, mcp-server, proxy, console, …
+├── commands/      # ThinRemote subcommands (agent, fleet, playbooks…)
+├── lib/           # ThinRemote modules: identity, device-api, proxy,
+│                  # console, playbooks, product scripts, MCP tools…
 ├── package.json
 └── README.md
 ```
+
+The generic part — API client, auth, profiles, REST helpers, the generic
+commands (login, logout, profile, device list/info/property/resource,
+product list/property-\_, bucket) and the generic MCP tools — comes from
+[@thinger-io/cli-core](https://github.com/thinger-io/cli-core), shared
+with the `thinger` CLI. `lib/identity.js` is what makes it `thinr`: names,
+`~/.config/thinr-cli`, `THINR\__`, the OAuth client and the product
+template.
 
 Local development:
 

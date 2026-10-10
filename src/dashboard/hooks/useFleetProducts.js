@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getProduct } from '../../../lib/product.js';
+import { getProduct } from '@thinger-io/cli-core/product';
 import { debugLog } from '../../../lib/debug-log.js';
 
 // Resolve product display names for every product present in the fleet.

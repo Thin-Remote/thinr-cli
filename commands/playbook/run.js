@@ -8,8 +8,8 @@ import {
     printErr,
     createSpinner,
     classifyError,
-} from '../../lib/output.js';
-import { success, error as errorStyle, warning, hint, label, muted } from '../../lib/format.js';
+} from '@thinger-io/cli-core/output';
+import { success, error as errorStyle, warning, hint, label, muted } from '@thinger-io/cli-core/format';
 import {
     applyJsonFlag,
     ensureConfigured,

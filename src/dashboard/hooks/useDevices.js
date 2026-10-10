@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getDevices } from '../../../lib/devices.js';
+import { getDevices } from '@thinger-io/cli-core/devices';
 import { debugCount, debugLog } from '../../../lib/debug-log.js';
 
 // Connect/disconnect ride the WS via `device_state_change`, so this poll

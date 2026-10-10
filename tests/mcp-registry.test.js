@@ -1,11 +1,21 @@
+import './setup.js';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { tools } from '../lib/mcp/registry.js';
+import { buildTools } from '@thinger-io/cli-core/mcp/registry';
+import { tools as thinrTools } from '../lib/mcp/registry.js';
+
+// What the MCP server serves: the generic tools of the core plus thinr's.
+const tools = buildTools(thinrTools);
 
 describe('mcp registry', () => {
-    it('exports a non-empty array of tools', () => {
-        assert.ok(Array.isArray(tools));
-        assert.ok(tools.length > 0);
+    it("serves the generic tools and thinr's own", () => {
+        const names = new Set(tools.map((t) => t.name));
+        for (const name of ['thinr_devices', 'thinr_bucket_read', 'thinr_token_list']) {
+            assert.ok(names.has(name), `generic ${name} missing`);
+        }
+        for (const name of ['thinr_exec', 'thinr_ls', 'thinr_playbook_run', 'thinr_monitoring']) {
+            assert.ok(names.has(name), `thinr ${name} missing`);
+        }
     });
 
     it('every tool has name, description, inputSchema and handler', () => {
@@ -17,10 +27,19 @@ describe('mcp registry', () => {
         }
     });
 
-    it('tool names are unique', () => {
+    it('tool names are unique and prefixed with thinr_', () => {
         const names = tools.map((t) => t.name);
-        const set = new Set(names);
-        assert.equal(set.size, names.length, 'duplicate tool name detected');
+        assert.equal(new Set(names).size, names.length, 'duplicate tool name detected');
+        for (const name of names) assert.match(name, /^thinr_[a-z0-9_]+$/);
+    });
+
+    it("thinr's agent-aware tools replace the generic ones", () => {
+        const info = tools.filter((t) => t.name === 'thinr_device_info');
+        assert.equal(info.length, 1);
+        assert.match(info[0].description, /hostname/);
+        const del = tools.filter((t) => t.name === 'thinr_product_delete');
+        assert.equal(del.length, 1);
+        assert.ok(del[0].inputSchema.properties.keep_storage);
     });
 
     it('every required field is declared in properties', () => {
@@ -44,5 +63,11 @@ describe('mcp registry', () => {
                 `${t.name} is missing the injected profile param`,
             );
         }
+    });
+
+    it('descriptions are fully expanded and name only thinr tools', () => {
+        const text = JSON.stringify(tools.map(({ handler: _h, ...t }) => t));
+        assert.doesNotMatch(text, /\{(tool|family):/);
+        assert.doesNotMatch(text, /thinger_/);
     });
 });

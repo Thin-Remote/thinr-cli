@@ -1,15 +1,20 @@
 // @ts-check
+import './setup.js';
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import api from '../lib/api.js';
+import api from '@thinger-io/cli-core/api';
 import {
     callDeviceResource,
     getDeviceResourceApi,
     getDeviceResources,
     listDeviceResourcesWithSchemas,
     readDeviceResource,
-} from '../lib/resource.js';
-import { getDeviceProperties, getDeviceProperty, setDeviceProperty } from '../lib/property.js';
+} from '@thinger-io/cli-core/resource';
+import {
+    getDeviceProperties,
+    getDeviceProperty,
+    setDeviceProperty,
+} from '@thinger-io/cli-core/property';
 import { getDeviceStatus } from '../lib/status.js';
 
 const DEVICE = 'edge-gw-17';

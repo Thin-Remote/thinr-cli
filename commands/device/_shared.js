@@ -1,6 +1,6 @@
 // @ts-check
-import { classifyError } from '../../lib/output.js';
-import { error as errorStyle } from '../../lib/format.js';
+import { classifyError } from '@thinger-io/cli-core/output';
+import { error as errorStyle } from '@thinger-io/cli-core/format';
 
 export {
     ensureConfigured,

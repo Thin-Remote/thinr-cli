@@ -1,7 +1,7 @@
 // @ts-check
 import Table from 'cli-table3';
 import { InvalidArgumentError } from 'commander';
-import { runPool } from '../../lib/concurrency.js';
+import { runPool } from '@thinger-io/cli-core/concurrency';
 import { getMonitoringData } from '../../lib/monitoring.js';
 import {
     formatUptime,
@@ -11,14 +11,14 @@ import {
     hint,
     success,
     error as errorStyle,
-} from '../../lib/format.js';
+} from '@thinger-io/cli-core/format';
 import {
     isJsonMode,
     printOk,
     printErr,
     createSpinner,
     classifyError,
-} from '../../lib/output.js';
+} from '@thinger-io/cli-core/output';
 import {
     applyJsonFlag,
     ensureConfigured,

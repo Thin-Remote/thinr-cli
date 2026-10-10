@@ -1,5 +1,5 @@
 // @ts-check
-import { getDevices } from '../../lib/devices.js';
+import { getDevices } from '@thinger-io/cli-core/devices';
 
 export async function fetchProductDevices(productId, group, user) {
     const filter = { product: productId };

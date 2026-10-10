@@ -9,14 +9,14 @@ import {
     success,
     error as errorStyle,
     warning,
-} from '../../lib/format.js';
+} from '@thinger-io/cli-core/format';
 import {
     isJsonMode,
     printOk,
     printErr,
     createSpinner,
     classifyError,
-} from '../../lib/output.js';
+} from '@thinger-io/cli-core/output';
 import {
     applyJsonFlag,
     ensureConfigured,

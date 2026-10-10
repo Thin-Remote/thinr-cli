@@ -1,7 +1,7 @@
 // @ts-check
 import { createDeviceAPI } from '../../lib/device-api.js';
-import { isJsonMode, printOk, printErr, createSpinner, classifyError } from '../../lib/output.js';
-import { success, hint, muted, label } from '../../lib/format.js';
+import { isJsonMode, printOk, printErr, createSpinner, classifyError } from '@thinger-io/cli-core/output';
+import { success, hint, muted, label } from '@thinger-io/cli-core/format';
 import { applyJsonFlag, ensureConfigured, getGlobalUser } from './_shared.js';
 
 /**

@@ -3,11 +3,19 @@
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
-import { Command } from 'commander';
 import figlet from 'figlet';
-import { accent, info } from '../lib/format.js';
-import { configExists, getActiveProfile, readConfig, setActiveProfile } from '../lib/config.js';
-import { detectJsonModeFromArgv } from '../lib/output.js';
+import { defineIdentity } from '@thinger-io/cli-core/identity';
+import { runCli } from '@thinger-io/cli-core/cli';
+import { authenticate } from '@thinger-io/cli-core/auth';
+import { configExists } from '@thinger-io/cli-core/config';
+import { accent, info } from '@thinger-io/cli-core/format';
+import { thinrIdentity } from '../lib/identity.js';
+import { tools as mcpTools } from '../lib/mcp/registry.js';
+import { registerDeviceCommands } from '../commands/device/index.js';
+import { registerProductCommands } from '../commands/product/index.js';
+import { fleetCommand } from '../commands/fleet/index.js';
+import { playbookCommand } from '../commands/playbook/index.js';
+import { runDashboard } from '../commands/dashboard.js';
 
 // Single source of truth for the version: package.json. Avoids the drift
 // between `package.json#version` and a hardcoded string in this file.
@@ -15,110 +23,35 @@ const pkg = JSON.parse(
     readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../package.json'), 'utf8'),
 );
 
-// Pick up --profile early so subsequent config reads use the right one.
-// Commander parses options later, but the config is touched before that.
-for (let i = 2; i < process.argv.length; i++) {
-    const a = process.argv[i];
-    if (a === '--profile' && process.argv[i + 1]) {
-        setActiveProfile(process.argv[i + 1]);
-        break;
-    }
-    if (a.startsWith('--profile=')) {
-        setActiveProfile(a.slice('--profile='.length));
-        break;
-    }
-}
-
-// Set JSON mode before any command runs so spinners/logs can opt out.
-detectJsonModeFromArgv();
-import { authenticate } from '../lib/auth.js';
-import { deviceCommand } from '../commands/device/index.js';
-import { fleetCommand } from '../commands/fleet/index.js';
-import { logoutCommand } from '../commands/logout.js';
-import { playbookCommand } from '../commands/playbook/index.js';
-import { productCommand } from '../commands/product/index.js';
-import { profileCommand } from '../commands/profile.js';
-import { runDashboard } from '../commands/dashboard.js';
-import { setBaseURL } from '../lib/api.js';
-import { startMCPServer } from '../lib/mcp/server.js';
-
 function displayBanner() {
     console.log(accent(figlet.textSync('thinr-cli', { horizontalLayout: 'full' })));
     console.log(info('Thin Remote CLI - Remote management for IoT devices'));
     console.log();
 }
 
-const program = new Command();
+defineIdentity(thinrIdentity);
 
-program
-    .name('thinr')
-    .description('CLI for ThinRemote - Remote management for IoT devices')
-    .version(pkg.version)
-    .option('-u, --user <username>', 'API user override (admin impersonation)')
-    .option('--profile <name>', 'Configuration profile to use (defaults to the saved default)');
+await runCli({
+    version: pkg.version,
+    mcpTools,
+    register(program, groups) {
+        registerDeviceCommands(groups.device);
+        registerProductCommands(groups.product);
+        fleetCommand(program);
+        playbookCommand(program);
 
-deviceCommand(program);
-fleetCommand(program);
-productCommand(program);
-playbookCommand(program);
-profileCommand(program);
-logoutCommand(program);
-
-program
-    .command('login')
-    .helpGroup('Profile:')
-    .description('Re-authenticate the current profile (renew an expired session)')
-    .action(async () => {
-        try {
-            // Pin the target to the active/default profile by name so the
-            // refreshed credentials overwrite it in place, even when the
-            // profile name differs from the server hostname.
-            const name = getActiveProfile();
-            if (name) setActiveProfile(name);
-            await authenticate();
-            console.log(info('Signed in.'));
-        } catch (error) {
-            console.error(`Error: ${error.message}`);
-            process.exit(1);
-        }
-    });
-
-program
-    .command('mcp')
-    .helpGroup('Integration:')
-    .description('Start the MCP server (stdio) for AI tool integration')
-    .action(async () => {
-        try {
-            await startMCPServer({ version: pkg.version });
-        } catch (error) {
-            console.error(`Error: ${error.message}`);
-            process.exit(1);
-        }
-    });
-
-// Handle help
-const originalHelp = program.help;
-program.help = function (cb) {
-    displayBanner();
-    return originalHelp.call(this, cb);
-};
-
-// initialize API base URL
-if (configExists()) {
-    const config = readConfig();
-    if (config.server) {
-        // Initialize API with the server if configured
-        setBaseURL(`https://${config.server}`);
-    }
-}
-
-// Handle no command (just "thinr"): launch the dashboard when running
-// interactively. Non-TTY contexts (pipes, scripts, `thinr | cat`) fall
-// back to `--help` so they get something useful instead of an Ink crash.
-if (process.argv.length <= 2) {
-    if (!process.stdout.isTTY) {
-        program.help();
-    } else {
+        const originalHelp = program.help;
+        program.help = function (cb) {
+            displayBanner();
+            return originalHelp.call(this, cb);
+        };
+    },
+    // Just `thinr`: launch the dashboard when running interactively (signing
+    // in first if there is no profile yet). Non-TTY contexts (pipes,
+    // scripts, `thinr | cat`) fall back to `--help` so they get something
+    // useful instead of an Ink crash.
+    async onNoCommand(program) {
+        if (!process.stdout.isTTY) program.help();
         if (!configExists()) {
             displayBanner();
             try {
@@ -129,8 +62,5 @@ if (process.argv.length <= 2) {
             }
         }
         await runDashboard();
-    }
-} else {
-    // Parse arguments - don't show banner for regular commands
-    program.parse(process.argv);
-}
+    },
+});

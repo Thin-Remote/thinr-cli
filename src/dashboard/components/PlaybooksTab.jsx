@@ -9,7 +9,7 @@ import { DevicePickerModal } from './DevicePickerModal.jsx';
 import { ConfirmModal } from './ConfirmModal.jsx';
 import { useProductPlaybooks } from '../hooks/useProductPlaybooks.js';
 import { usePlaybookRunController } from '../hooks/usePlaybookRunController.js';
-import { filterActiveDevices } from '../../../lib/devices.js';
+import { filterActiveDevices } from '@thinger-io/cli-core/devices';
 
 const PANELS = ['list', 'detail', 'reports'];
 

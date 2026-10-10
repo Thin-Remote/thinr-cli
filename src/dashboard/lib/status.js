@@ -1,4 +1,4 @@
-import { ALARM_SEVERITY } from '../../../lib/alarms.js';
+import { ALARM_SEVERITY } from '@thinger-io/cli-core/alarms';
 import { debugLog } from '../../../lib/debug-log.js';
 
 // Health = single source of truth across the dashboard. Severity wins over

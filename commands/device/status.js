@@ -1,7 +1,7 @@
 // @ts-check
 import { getDeviceStatus, formatDeviceStatus } from '../../lib/status.js';
 import { getMonitoringData } from '../../lib/monitoring.js';
-import { isJsonMode, printOk } from '../../lib/output.js';
+import { isJsonMode, printOk } from '@thinger-io/cli-core/output';
 import { applyJsonFlag, ensureConfigured, runDeviceCommand } from './_shared.js';
 
 export function registerStatusCommand(device) {

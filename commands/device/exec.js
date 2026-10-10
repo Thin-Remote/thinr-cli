@@ -1,7 +1,7 @@
 // @ts-check
 import { createDeviceAPI } from '../../lib/device-api.js';
-import { isJsonMode, printOk, printErr, classifyError } from '../../lib/output.js';
-import { error as errorStyle, warning } from '../../lib/format.js';
+import { isJsonMode, printOk, printErr, classifyError } from '@thinger-io/cli-core/output';
+import { error as errorStyle, warning } from '@thinger-io/cli-core/format';
 import { applyJsonFlag, ensureConfigured, getGlobalUser } from './_shared.js';
 
 export function registerExecCommand(device) {

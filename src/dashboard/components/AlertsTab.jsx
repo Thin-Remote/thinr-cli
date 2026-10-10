@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../theme.js';
 import { Panel } from './Panel.jsx';
-import { ALARM_SEVERITY, ALARM_STATE } from '../../../lib/alarms.js';
+import { ALARM_SEVERITY, ALARM_STATE } from '@thinger-io/cli-core/alarms';
 
 const SEVERITY_STYLE = {
     [ALARM_SEVERITY.CRITICAL]: { glyph: '●', color: theme.red, label: 'CRIT' },

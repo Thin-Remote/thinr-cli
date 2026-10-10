@@ -1,5 +1,30 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- The generic core (API client, auth, profiles, REST helpers, generic
+  commands and MCP tools) now comes from `@thinger-io/cli-core`, shared with
+  the `thinger` CLI. thinr supplies its identity (`lib/identity.js`) and
+  its own commands and tools on top. Profiles, `THINR_*` variables and tool
+  names are unchanged.
+- MCP calls with a `profile` argument are scoped to that call, so
+  concurrent calls against different profiles no longer share the server
+  or token.
+- `thinr logout` revokes the API token it created at a username/password
+  login (`--keep-token` to keep it) and accepts `--all`.
+- Server error messages are included in the errors shown.
+
+### Added
+
+- `thinr login --server --username --token` signs in without prompts; a
+  prompt with no terminal fails with a clear message.
+- `thinr device info`, `create`, `set-product`, `property-set`;
+  `thinr product info`, `create`, `delete`; `thinr bucket list`, `read`.
+- MCP: `thinr_device_create` and `thinr_buckets`.
+- Servers may be given as URLs (`http://localhost:8080`).
+
 ## [1.3.5] - 2026-09-24
 
 ### Fixed

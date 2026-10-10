@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getAlarmInstances, ALARM_STATE } from '../../../lib/alarms.js';
+import { getAlarmInstances, ALARM_STATE } from '@thinger-io/cli-core/alarms';
 import { eventStream } from '../../../lib/dashboard/event-stream.js';
 import { debugLog } from '../../../lib/debug-log.js';
 

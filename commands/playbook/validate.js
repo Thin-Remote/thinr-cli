@@ -1,7 +1,7 @@
 // @ts-check
 import { loadPlaybookFile } from '../../lib/playbook/loader.js';
-import { isJsonMode, printOk, printErr, classifyError } from '../../lib/output.js';
-import { success, label, hint } from '../../lib/format.js';
+import { isJsonMode, printOk, printErr, classifyError } from '@thinger-io/cli-core/output';
+import { success, label, hint } from '@thinger-io/cli-core/format';
 import { applyJsonFlag } from './_shared.js';
 
 export function registerValidateCommand(playbook) {

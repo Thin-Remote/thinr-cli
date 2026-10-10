@@ -1,6 +1,7 @@
+import './setup.js';
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import api from '../lib/api.js';
+import api from '@thinger-io/cli-core/api';
 import {
     addLogSource,
     getProductLogs,

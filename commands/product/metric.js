@@ -4,8 +4,8 @@ import {
     upsertDashboardMetric,
     removeDashboardMetric,
 } from '../../lib/product.js';
-import { info, success } from '../../lib/format.js';
-import { isJsonMode, printOk, printErr, classifyError } from '../../lib/output.js';
+import { info, success } from '@thinger-io/cli-core/format';
+import { isJsonMode, printOk, printErr, classifyError } from '@thinger-io/cli-core/output';
 import { applyJsonFlag, ensureConfigured, getGlobalUser } from '../_shared.js';
 
 function stringifyMetricLine(m) {

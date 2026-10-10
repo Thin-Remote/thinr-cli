@@ -1,7 +1,5 @@
 // @ts-check
-import { registerProductListCommand } from './list.js';
 import { registerProductPropertyCommand } from './property.js';
-import { registerProductPropertyAdminCommands } from './props.js';
 import { registerProductMetricCommands } from './metric.js';
 import { registerProductResourceCommand } from './resource.js';
 import { registerProductExecCommand } from './exec.js';
@@ -13,18 +11,13 @@ import { registerProductLogsCommand } from './logs.js';
 
 /**
  * `thinr product <subcommand> <productId> …` — fan-out commands across
- * every device that belongs to a product.
+ * every device that belongs to a product, plus metrics, scripts and
+ * playbooks, added to the generic `product` group of @thinger-io/cli-core
+ * (list, info, create, delete, property-list/get/set/delete).
  */
-export function productCommand(program) {
-    const product = program
-        .command('product')
-        .helpGroup('Operations:')
-        .description('Product commands (subcommand-first: thinr product <action> <productId>)');
-
-    registerProductListCommand(product);
+export function registerProductCommands(product) {
     registerProductStatusCommand(product);
     registerProductPropertyCommand(product);
-    registerProductPropertyAdminCommands(product);
     registerProductMetricCommands(product);
     registerProductResourceCommand(product);
     registerProductExecCommand(product);

@@ -15,9 +15,9 @@ import { parsePlaybook } from '../../lib/playbook/loader.js';
 import { buildDryRunPlan, runPlaybook } from '../../lib/playbook/runner.js';
 import { DEFAULT_FAILURE_THRESHOLD, runFleetPlaybook } from '../../lib/playbook/fleet.js';
 import { coerceCliVarValue, listVariables, resolveVarScope } from '../../lib/playbook/vars.js';
-import { filterActiveDevices, getDevices } from '../../lib/devices.js';
-import { requireConfig } from '../../lib/config.js';
-import { inputError } from '../../lib/errors.js';
+import { filterActiveDevices, getDevices } from '@thinger-io/cli-core/devices';
+import { requireConfig } from '@thinger-io/cli-core/config';
+import { inputError } from '@thinger-io/cli-core/errors';
 import {
     accent,
     error as errorStyle,
@@ -27,8 +27,8 @@ import {
     muted,
     success,
     warning,
-} from '../../lib/format.js';
-import { classifyError, createSpinner, isJsonMode, printErr, printOk } from '../../lib/output.js';
+} from '@thinger-io/cli-core/format';
+import { classifyError, createSpinner, isJsonMode, printErr, printOk } from '@thinger-io/cli-core/output';
 import {
     applyJsonFlag,
     collectKeyValue,

@@ -26,20 +26,19 @@
 import process from 'node:process';
 import { randomBytes } from 'node:crypto';
 
-import { getActiveProfile, readConfig } from '../../lib/config.js';
+import { getActiveProfile, readConfig } from '@thinger-io/cli-core/config';
+import { createProduct, productExists } from '@thinger-io/cli-core/product';
 import {
-    createProduct,
     deleteProductPlaybook,
     deleteProductWithStorage,
     listProductPlaybooks,
-    productExists,
     readProductPlaybook,
     uploadProductPlaybook,
 } from '../../lib/product.js';
 import { parsePlaybook } from '../../lib/playbook/loader.js';
 import { listVariables, resolveVarScope } from '../../lib/playbook/vars.js';
 import { buildDryRunPlan, runPlaybook } from '../../lib/playbook/runner.js';
-import { getDevice } from '../../lib/devices.js';
+import { getDevice } from '@thinger-io/cli-core/devices';
 
 const PREFIX = 'playbook-e2e-';
 
