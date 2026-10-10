@@ -4,6 +4,9 @@ import assert from 'node:assert/strict';
 import { buildTools } from '@thinger-io/cli-core/mcp/registry';
 import { tools as thinrTools } from '../lib/mcp/registry.js';
 import { resourceHooks } from '../lib/mcp/resource-hooks.js';
+import { guides } from '../lib/guides.js';
+import { mcpInstructions } from '../lib/identity.js';
+import fs from 'node:fs';
 
 // What the MCP server serves: the generic tools of the core plus thinr's.
 const tools = buildTools(thinrTools);
@@ -83,5 +86,25 @@ describe('mcp registry', () => {
         const text = JSON.stringify(tools.map(({ handler: _h, ...t }) => t));
         assert.doesNotMatch(text, /\{(tool|family):/);
         assert.doesNotMatch(text, /thinger_/);
+    });
+
+    // Descriptions stay short and point at the guides for the how-to: every
+    // guide they name must exist, and ship with the package.
+    it('points only at guides that exist', () => {
+        const ids = new Set(guides.map((g) => g.id));
+        for (const g of guides) assert.ok(fs.existsSync(g.file), `${g.id}: missing ${g.file}`);
+        const text = JSON.stringify(tools.map(({ handler: _h, ...t }) => t));
+        for (const [, id] of text.matchAll(/thinr_doc_read id \\"([a-z0-9-]+)\\"/g)) {
+            assert.ok(ids.has(id), `descriptions refer to unknown guide ${id}`);
+        }
+        assert.match(text, /thinr_doc_read id \\"thinremote-scripts\\"/);
+    });
+
+    it('instructions name tools that exist', () => {
+        const names = new Set(tools.map((t) => t.name));
+        for (const ref of mcpInstructions.match(/thinr_[a-z_]+/g) || []) {
+            if (ref.endsWith('_')) continue; // thinr_resource_list / _get… shorthand
+            assert.ok(names.has(ref), `instructions mention ${ref}`);
+        }
     });
 });

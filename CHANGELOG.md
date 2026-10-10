@@ -5,7 +5,7 @@
 Incompatible change of the MCP tool names: the generic tools now come from
 `@thinger-io/cli-core` 0.2.0, and thinr's own tools follow its naming rule
 `<object>[_<subobject>]_<verb>`. From 86 tools to 63, and from about 29,000
-to about 20,500 tokens in `tools/list`.
+to about 17,100 tokens in `tools/list`.
 
 ### Changed
 
@@ -43,6 +43,12 @@ to about 20,500 tokens in `tools/list`.
 
 ### Added
 
+- Guides for agents, shipped with the CLI and served by `thinr_doc_read`
+  and as MCP resources (`docs/guides/`): `thinremote` (the agent, products,
+  which tool for each need, recipes), `thinremote-scripts`,
+  `thinremote-playbooks`, `thinremote-product-dashboard`. Tool descriptions
+  are now short and point at them.
+- MCP server instructions: read the guide first, confirm fleet changes.
 - `thinr login --server --username --token` signs in without prompts; a
   prompt with no terminal fails with a clear message.
 - `thinr device info`, `create`, `set-product`, `property-set`;
