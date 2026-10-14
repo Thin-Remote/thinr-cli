@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.4.0] - Unreleased
+## [1.4.0] - 2026-10-14
 
 Incompatible change of the MCP tools: thinr is now the generic core it
 shares with the `thinger` CLI, `@thinger-io/cli-core` 0.3.0, plus what only
