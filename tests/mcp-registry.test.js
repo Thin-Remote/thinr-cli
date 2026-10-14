@@ -4,12 +4,19 @@ import assert from 'node:assert/strict';
 import { buildTools } from '@thinger-io/cli-core/mcp/registry';
 import { tools as thinrTools } from '../lib/mcp/registry.js';
 import { resourceHooks } from '../lib/mcp/resource-hooks.js';
+import { resourceActions, resourceTypes } from '../lib/mcp/resource-types.js';
 import { guides } from '../lib/guides.js';
 import { mcpInstructions } from '../lib/identity.js';
 import fs from 'node:fs';
 
-// What the MCP server serves: the generic tools of the core plus thinr's.
-const tools = buildTools(thinrTools);
+// What the MCP server serves: the generic tools of the core, over the
+// server's types and thinr's, plus thinr's one tool.
+const tools = buildTools(thinrTools, {
+    hooks: resourceHooks,
+    types: resourceTypes,
+    actions: resourceActions,
+});
+const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
 
 describe('mcp registry', () => {
     it("serves the generic tools and thinr's own", () => {
@@ -17,16 +24,24 @@ describe('mcp registry', () => {
         for (const name of ['thinr_resource_list', 'thinr_bucket_data_read', 'thinr_doc_read']) {
             assert.ok(names.has(name), `generic ${name} missing`);
         }
-        for (const name of [
-            'thinr_device_exec',
-            'thinr_device_file_list',
-            'thinr_device_monitoring_get',
-            'thinr_device_script_write',
-            'thinr_playbook_run',
-            'thinr_product_metric_write',
-        ]) {
-            assert.ok(names.has(name), `thinr ${name} missing`);
+        // thinr's only own tool: the rest are resource types and actions.
+        assert.deepEqual(
+            thinrTools.map((t) => t.name),
+            ['device_exec'],
+        );
+        assert.equal(tools.length, 24);
+    });
+
+    it('serves its resource types and actions through the generic tools', () => {
+        const typeEnum = (tool) => byName[tool].inputSchema.properties.type.enum;
+        for (const type of Object.keys(resourceTypes)) {
+            assert.ok(typeEnum('thinr_resource_list').includes(type), `${type} not listable`);
+            assert.ok(typeEnum('thinr_resource_describe').includes(type), type);
         }
+        for (const type of ['device_fs', 'product_playbook', 'device']) {
+            assert.ok(typeEnum('thinr_resource_call').includes(type), `${type} has no actions`);
+        }
+        assert.deepEqual(Object.keys(resourceActions.device), ['agent_update', 'agent_install']);
     });
 
     it('every tool has name, description, inputSchema and handler', () => {
@@ -93,11 +108,17 @@ describe('mcp registry', () => {
     it('points only at guides that exist', () => {
         const ids = new Set(guides.map((g) => g.id));
         for (const g of guides) assert.ok(fs.existsSync(g.file), `${g.id}: missing ${g.file}`);
-        const text = JSON.stringify(tools.map(({ handler: _h, ...t }) => t));
-        for (const [, id] of text.matchAll(/thinr_doc_read id \\"([a-z0-9-]+)\\"/g)) {
+        const text = JSON.stringify([
+            ...tools.map(({ handler: _h, ...t }) => t),
+            ...Object.values(resourceTypes).map((t) => t.notes),
+        ]);
+        const refs = [
+            ...text.matchAll(/(?:thinr_doc_read|\{tool:doc_read\}) id \\"([a-z0-9-]+)\\"/g),
+        ];
+        for (const [, id] of refs) {
             assert.ok(ids.has(id), `descriptions refer to unknown guide ${id}`);
         }
-        assert.match(text, /thinr_doc_read id \\"thinremote-scripts\\"/);
+        assert.ok(refs.some(([, id]) => id === 'thinremote-scripts'));
     });
 
     it('instructions name tools that exist', () => {

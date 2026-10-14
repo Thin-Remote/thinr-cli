@@ -10,24 +10,32 @@ Tool names below omit the `thinr_` prefix.
 
 ## Authoring flow
 
-1. `playbook_describe` once: the full schema (document, `vars`, step fields,
-   every action with its parameters, the `when` syntax). Write against it.
-2. Draft the YAML, then `playbook_validate` and fix what it reports. Repeat
-   until it is clean. Never skip validation.
-3. Save it on the product: `product_playbook_write` (upsert; validates again,
-   writes `playbooks/<name>.yaml` in the product storage and registers it in
-   the `playbooks` product property, rolling the file back if that fails).
-4. Try it on one device: `product_playbook_run` with `dry_run: true` (the
-   resolved plan, no device contacted), then `check: true` (contacts the
-   device read-only: each step says changed / unchanged / unknown), then for
-   real.
-5. Roll it out: `product_playbook_rollout` (below).
+A saved playbook is a resource of type `product_playbook`, with the product
+as parent and its name as id; validating, running and rolling it out are
+its actions (`resource_call`).
 
-For a one-off run that is not worth saving, `playbook_run` takes the YAML
-inline, with the same `dry_run` and `check`.
+1. `resource_describe` type `product_playbook` once: its `playbook_format`
+   is the full schema (document, `vars`, step fields, every action with its
+   parameters, the `when` syntax). Write against it.
+2. Draft the YAML, then action `validate` with the YAML in `body.content`,
+   and fix what it reports. Repeat until it is clean.
+3. Save it: `resource_create` type `product_playbook`, body
+   `{"content": "<yaml>", "description"?: "…"}` (validated again: nothing is
+   saved if invalid; it writes `playbooks/<name>.yaml` in the product storage
+   and registers it in the `playbooks` product property). Change it later
+   with `resource_update`.
+4. Try it on one device: action `run` with the playbook's `id` and
+   `body.device`, first with `dry_run: true` (the resolved plan, no device
+   contacted), then `check: true` (contacts the device read-only: each step
+   says changed / unchanged / unknown), then for real.
+5. Roll it out: action `rollout` (below).
 
-`product_playbook_list` and `product_playbook_read` show what a product
-has; `product_playbook_delete` removes one (index entry, then file).
+For a one-off run that is not worth saving, action `run` without `id` takes
+the YAML in `body.content`, with the same `dry_run` and `check`; it targets
+`body.device`, `body.devices`, `body.group` or every device of the product.
+
+`resource_list` and `resource_get` show what a product has (`get` includes
+the YAML); `resource_delete` removes one (index entry, then file).
 
 ## Document
 
@@ -36,7 +44,7 @@ name: nginx-config
 description: Deploy nginx.conf and reload
 target:
     product: web_gateways # or devices: [gw1, gw2]; group: madrid narrows
-    concurrency: 10 # parallel devices (playbook_run)
+    concurrency: 10 # parallel devices (action run)
     fail_fast: false
 vars:
     port:
@@ -57,7 +65,7 @@ steps:
       command: nginx -t -c /tmp/nginx.conf
       register: check
     - name: Move it into place
-      action: mv
+      action: move
       source: /tmp/nginx.conf
       destination: /etc/nginx/nginx.conf
       overwrite: true
@@ -82,35 +90,41 @@ duration_ms }` to later steps), `pause_after` (seconds).
 
 Actions:
 
-| Action                             | Parameters (\* required)               | Does                                                     |
-| ---------------------------------- | -------------------------------------- | -------------------------------------------------------- |
-| `exec`                             | `command`\*, `timeout`                 | runs a shell command; non-zero exit fails the step       |
-| `write`                            | `path`_, `content`_                    | writes inline content                                    |
-| `push` / `pull`                    | `source`_, `destination`_              | copies a file from / to the machine running the playbook |
-| `mkdir`                            | `path`\*                               | creates a directory                                      |
-| `mv`                               | `source`_, `destination`_, `overwrite` | moves; write to a temp file then `mv` for atomic deploys |
-| `rm`                               | `path`\*, `recursive`                  | deletes                                                  |
-| `property_set`                     | `property`_, `value`_                  | sets a device property                                   |
-| `resource`                         | `resource`\*, `inputs`                 | calls a device resource                                  |
-| `script_install` / `script_delete` | `name`\*, `content` or `content_file`  | installs or removes a device script                      |
-| `update`                           | `op`\*, `channel`                      | checks for or applies an agent update                    |
-| `sleep`                            | `seconds`\*                            | waits                                                    |
+| Action                             | Parameters (\* required)               | Does                                                       |
+| ---------------------------------- | -------------------------------------- | ---------------------------------------------------------- |
+| `exec`                             | `command`\*, `timeout`                 | runs a shell command; non-zero exit fails the step         |
+| `write`                            | `path`_, `content`_                    | writes inline content                                      |
+| `push` / `pull`                    | `source`_, `destination`_              | copies a file from / to the machine running the playbook   |
+| `mkdir`                            | `path`\*                               | creates a directory                                        |
+| `move`                             | `source`_, `destination`_, `overwrite` | moves; write to a temp file then `move` for atomic deploys |
+| `delete`                           | `path`\*, `recursive`                  | deletes                                                    |
+| `property_set`                     | `property`_, `value`_                  | sets a device property                                     |
+| `resource`                         | `resource`\*, `inputs`                 | calls a device resource                                    |
+| `script_install` / `script_delete` | `name`\*, `content` or `content_file`  | installs or removes a device script                        |
+| `update`                           | `op`\*, `channel`                      | checks for or applies an agent update                      |
+| `sleep`                            | `seconds`\*                            | waits                                                      |
 
 `check` cannot predict `exec` or `resource` steps: they report `unknown`.
 
 ## Rolling out
 
-`product_playbook_rollout` runs a saved playbook on every matching device of
-the product, in batches of `batch_size` (default 5). A batch finishes before
+Action `rollout` (`resource_call` type `product_playbook`, the playbook's
+`id`) runs a saved playbook on every matching device of the product, in batches of `body.batch_size` (default 5). A batch finishes before
 the next starts; after each one the cumulative failure rate is compared
-with `failure_threshold` (default 10 %), and reaching it stops the rollout
+with `body.failure_threshold` (default 10 %), and reaching it stops the rollout
 without touching the remaining devices. Narrow the targets with `group` or
 `filter`; offline devices are skipped unless `include_offline`. `dry_run`
 lists the plan and the devices; `check` reports what would change.
 
 Each rollout writes a report to `playbooks/runs/<timestamp>-<name>-<user>.json`
-in the product storage: resolved variables, per-device outcome, and why it
-stopped if it did.
+in the product storage (read it with `storage_file_read`, storage named like
+the product): resolved variables, per-device outcome, and why it stopped if
+it did. A rollout that stops does not undo the devices it already changed:
+write files to a temporary path and `move` them into place, so a device is
+never left with half a change.
+
+Writing the same file to every device is a playbook too: a `write` step
+(and a `move`), rolled out.
 
 Rollouts change real machines: confirm with the user, test on one device
 first, and start with small batches.

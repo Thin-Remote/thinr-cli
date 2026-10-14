@@ -12,7 +12,7 @@ Two operating modes:
 
 - **CLI** — interactive or scripted device management from a shell.
 - **MCP server** — a stdio [Model Context Protocol][mcp] server that
-  exposes the same operations as 80+ typed tools for AI clients like
+  exposes the same operations as 24 typed tools for AI clients like
   Claude Code, Claude Desktop and Cursor.
 
 Both modes share the same auth, profiles, and device API layer, so
@@ -349,9 +349,9 @@ thinr product exec my-product "apt-get -y upgrade" -c 5 --timeout 600
 thinr product exec my-product "systemctl restart agent" -g staging
 ```
 
-Also exposed as an MCP tool (`thinr_product_exec`) with the same
-parameters, so agents can drive a fleet operation with a single call
-instead of looping `thinr_exec` per device.
+Also exposed to MCP clients as `thinr_device_exec` with `product` (and
+`group`), so agents run a fleet operation with a single call instead of
+looping per device.
 
 #### `playbook`
 
@@ -446,13 +446,9 @@ active profile; `--server`, `--username` and `--token` skip the prompts.
 
 ## Part 2 — MCP server
 
-`thinr` ships an [MCP][mcp] server that exposes the CLI's device and
-fleet operations as a set of 80+ typed tools. AI clients (Claude Code,
-Claude Desktop, Cursor, and any other MCP-compatible host) can list
-devices, run shell commands, read/write files, call resources, manage
-products, author and roll out playbooks, triage alarms and rotate
-access tokens through the same API the CLI uses — with stable schemas
-and a consistent error contract.
+`thinr` ships an [MCP][mcp] server for AI clients (Claude Code, Claude
+Desktop, Cursor and any other MCP host): 24 tools that reach everything the
+CLI does, through the same API, with stable schemas and one error contract.
 
 ### Starting the server
 
@@ -460,117 +456,91 @@ and a consistent error contract.
 thinr mcp
 ```
 
-The server speaks [MCP over stdio][mcp-stdio]. Every tool call carries
-its own `device`, `user` and `profile` arguments, so a single running
-server handles any device of any configured environment without a
-restart.
+The server speaks [MCP over stdio][mcp-stdio]. Every tool call carries its
+own `profile` and `user` arguments, so a single running server handles any
+device of any configured environment without a restart.
 
 [mcp-stdio]: https://modelcontextprotocol.io/specification/server/transport#stdio
 
-### Tool catalog
+### Tools
 
-Grouped by capability. Every tool accepts optional `device` (when
-relevant), `user` and `profile` arguments, so a single session can
-target any device, account or environment without restart.
+thinr is built on [`@thinger-io/cli-core`][cli-core], the core it shares
+with the `thinger` CLI, and serves its 23 generic tools with the `thinr_`
+prefix plus one of its own:
 
-| Area                         | Tools                                                                                                                                                                                                                 |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Discovery                    | `thinr_devices` (with optional `query` for regex filtering), `thinr_device_info`, `thinr_profiles`                                                                                                                    |
-| Provisioning and lifecycle   | `thinr_agent_install_command`, `thinr_device_set_product`, `thinr_device_delete`                                                                                                                                      |
-| Shell                        | `thinr_exec` (buffered), with streaming stdout/stderr                                                                                                                                                                 |
-| Filesystem                   | `thinr_read`, `thinr_write`, `thinr_push`, `thinr_pull`, `thinr_ls`, `thinr_mkdir`, `thinr_rm`, `thinr_mv`                                                                                                            |
-| Resources                    | `thinr_resource_list` (with `in`/`out` schemas), `thinr_resource_call`                                                                                                                                                |
-| Properties (device)          | `thinr_property_get`, `thinr_property_set`                                                                                                                                                                            |
-| Scripts (device)             | `thinr_script_list`, `thinr_script_write`, `thinr_script_delete`                                                                                                                                                      |
-| Monitoring and agent updates | `thinr_monitoring`, `thinr_bucket_read`, `thinr_update`                                                                                                                                                               |
-| Alarms                       | `thinr_alarm_instances`, `thinr_alarm_instance_stats`, `thinr_alarm_instance_get`, `thinr_alarm_instance_update`, `thinr_alarm_instance_delete`, `thinr_alarm_rules`, `thinr_alarm_rule_read/write/delete`            |
-| Access tokens                | User: `thinr_token_list`, `thinr_token_get`, `thinr_token_create`, `thinr_token_update`, `thinr_token_delete`. Device: `thinr_device_token_list`, `thinr_device_token_create`, `thinr_device_token_delete`            |
-| Products                     | `thinr_products`, `thinr_product_create`, `thinr_product_update`, `thinr_product_delete`, `thinr_product_exec`, `thinr_product_write`                                                                                 |
-| Product scripts              | `thinr_product_script_list`, `thinr_product_script_read`, `thinr_product_script_write`, `thinr_product_script_delete`                                                                                                 |
-| Product properties           | `thinr_product_property_get`, `thinr_product_property_set`, `thinr_product_property_delete`                                                                                                                           |
-| Product profile schema       | `thinr_product_profile_api_{list,get,set,delete}`, `thinr_product_profile_bucket_{list,get,set,delete}`, `thinr_product_profile_property_{list,get,set,delete}`                                                       |
-| Product log sources          | `thinr_product_logs_list`, `thinr_product_logs_add`, `thinr_product_logs_remove`, `thinr_product_logs_presets`, `thinr_product_logs_set_default`                                                                      |
-| Product metrics              | `thinr_product_metric_list`, `thinr_product_metric_set`, `thinr_product_metric_delete`                                                                                                                                |
-| Playbooks (authoring)        | `thinr_playbook_schema`, `thinr_playbook_validate`, `thinr_playbook_run` (ad-hoc)                                                                                                                                     |
-| Product playbooks            | `thinr_product_playbook_list`, `thinr_product_playbook_read`, `thinr_product_playbook_write`, `thinr_product_playbook_run` (single device), `thinr_product_playbook_rollout` (fleet), `thinr_product_playbook_delete` |
+| Tools                                                                                                                                                    | What for                                                                                                               |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `thinr_resource_describe`, `_list`, `_get`, `_create`, `_update`, `_delete`, `_clone`, `_call`                                                           | Every resource type: the server's and ThinRemote's (below), and their actions                                          |
+| `thinr_device_resource_list`, `thinr_device_resource_call`                                                                                               | What a connected device exposes: agent resources (`monitoring`, `cmd`…) and its scripts                                |
+| `thinr_bucket_data_read`, `thinr_bucket_data_write`                                                                                                      | Time series, monitoring history included (bucket `monitoring`)                                                         |
+| `thinr_storage_file_*`, `thinr_dashboard_publish`, `thinr_plugin_call`, `thinr_product_resource_call`, `thinr_device_data_send`, `thinr_device_overview` | Storages, web dashboards, plugins, product APIs, HTTP devices, account usage                                           |
+| `thinr_doc_read`, `thinr_profile_list`                                                                                                                   | Guides for agents (`thinremote`, `thinremote-scripts`, `thinremote-playbooks`, `thinremote-metrics-logs`) and profiles |
+| `thinr_device_exec`                                                                                                                                      | A shell command on one device, or on several at once (`devices`, `product`, `group`, `all`)                            |
 
-Full input/output schemas are published via standard MCP
-`list_tools`; the client will show them when you connect.
+ThinRemote adds its own resource types to the generic tools, so they are
+listed, read, written and deleted like a device or a token:
+
+| Type                 | Parent  | What it is                                                                     | Actions (`thinr_resource_call`) |
+| -------------------- | ------- | ------------------------------------------------------------------------------ | ------------------------------- |
+| `device_fs`          | device  | Files and folders of the device (id: the path)                                 | `move`, `push`, `pull`          |
+| `device_script`      | device  | Scripts of the agent, each a resource of the device                            |                                 |
+| `product_script`     | product | Scripts run on any device of the product, kept once in its storage             |                                 |
+| `product_metric`     | product | Metrics of thinr's terminal dashboard                                          |                                 |
+| `product_log_source` | product | Log sources an operator streams from a device                                  |                                 |
+| `product_playbook`   | product | Playbooks: YAML steps validated, tried on one device and rolled out in batches | `validate`, `run`, `rollout`    |
+
+and two actions to the server's `device` type: `agent_update` (check for or
+install a new agent) and `agent_install` (the command that installs the
+agent on a new machine). Live monitoring is the device resource
+`monitoring`; its history, the bucket `monitoring`.
+
+Full input schemas come with the standard MCP `tools/list`, and
+`thinr_resource_describe` gives each type's fields and actions.
+
+[cli-core]: https://github.com/thinger-io/thinger-cli-core
 
 ### Authoring playbooks from natural language
 
-Playbooks are declarative YAML documents — steps like `exec`, `write`,
-`install_package`, `service`, plus a `target` block and a `vars`
-block — that the runner applies to a device or a fleet. With the MCP
-server connected, an AI assistant can turn a natural-language request
-into a validated playbook and store it on the relevant product
-without the user ever writing YAML by hand.
+Playbooks are YAML documents with ordered steps (`exec`, `write`, `move`,
+`delete`, `script_install`…), a `target` and `vars`, that the agent applies
+on each device. With the MCP server connected, an assistant can turn a
+request into a validated playbook stored on the product, without anyone
+writing YAML by hand:
 
-The intended authoring loop is:
+1. **Read the format.** `thinr_resource_describe` type `product_playbook`:
+   its `playbook_format` lists the document fields, the target, the two
+   forms of `vars` (plain and extended) and every step action.
+2. **Draft and validate.** Write the YAML and call `thinr_resource_call`
+   type `product_playbook`, action `validate`, with it in `body.content`;
+   fix what it reports until it is clean.
+3. **Save.** `thinr_resource_create` type `product_playbook`, parent the
+   product, id a short name, body `{content}`. It is validated again and
+   nothing is saved if invalid.
+4. **Pre-flight on one device.** Action `run` with the playbook's id and
+   `body.device`, with `dry_run: true` or `check: true` for a read-only
+   preview, then for real.
+5. **Roll out.** Action `rollout` runs it across the fleet in batches with a
+   failure-rate stop, and writes a report to `playbooks/runs/` in the
+   product storage.
 
-1. **Fetch the schema.** Call `thinr_playbook_schema` once at the
-   start of the session to get the authoritative list of top-level
-   fields, target block, step actions with their parameters, and the
-   two accepted forms of the `vars` block (plain and extended).
-2. **Draft the YAML.** Translate the user's request into a playbook
-   draft. Use the extended `vars` form
-   (`default` / `description` / `type` / `overridable` / `required`)
-   whenever the user hints at knobs the caller may need to tune at
-   run time.
-3. **Validate and iterate.** Call `thinr_playbook_validate` with the
-   draft. On failure, read the consolidated error message, fix the
-   YAML, and call validate again. Never skip this step.
-4. **Upload.** Once validation is clean, call
-   `thinr_product_playbook_write` with the product id, a short name
-   (letters / digits / underscore / dash), and the validated YAML.
-   The tool re-validates server-side; never pass `skip_validation` to
-   mask a real error.
-5. **Pre-flight on one device.** Call
-   `thinr_product_playbook_run` with a single `device` (plus
-   `dry_run: true` or `check: true` for a read-only preview) to
-   confirm the steps behave as expected.
-6. **Roll out.** Finally, `thinr_product_playbook_rollout` rolls the
-   playbook across the fleet in batches with a failure-rate kill
-   switch, and writes a persistent report to `playbooks/runs/` in the
-   product file storage.
+Example prompt:
 
-Example prompt the user can give the assistant:
+> "On product `edge-gateways`, create a playbook called `nginx-upgrade`
+> that updates the nginx package, renders `/etc/nginx/nginx.conf` from a
+> template, and restarts nginx only if the config check passes. Make
+> `worker_connections` an overridable integer variable, default 1024. Then
+> try it on `edge-gw-17` in check mode."
 
-> "On product `edge-gateways`, create a playbook called
-> `nginx-upgrade` that updates the nginx package, renders
-> `/etc/nginx/nginx.conf` from a template, and restarts nginx only
-> if the config check passes. Make `worker_connections` an
-> overridable integer variable, default 1024. Then try it on
-> `edge-gw-17` in check mode."
-
-A well-behaved assistant translates this into:
-
-- `thinr_playbook_schema` → read the authoring contract.
-- Draft YAML → `thinr_playbook_validate` until clean.
-- `thinr_product_playbook_write` with `product="edge-gateways"`,
-  `name="nginx-upgrade"`, and the validated content.
-- `thinr_product_playbook_run` with `device="edge-gw-17"` and
-  `check: true` to preview what would change.
-
-After that a second message like "looks good, roll it out to staging"
-maps to `thinr_product_playbook_rollout` with the matching
-`group` / `filter` and a conservative `batch_size`.
+A second message like "looks good, roll it out to staging" maps to the
+`rollout` action with `group` and a conservative `batch_size`.
 
 ### Per-call controls
 
-The server starts with no per-session pin: every tool call must say
-which device it's for, and may optionally override the account or
-profile for that single call.
-
-- **`device`** — required for any device-scoped tool. Use
-  `thinr_devices` (optionally with `query` to filter by regex) to
-  discover ids.
-- **`user`** — optional admin impersonation; falls back to the
-  authenticated user of the active profile.
-- **`profile`** — optional. Switches the active profile for that
-  single tool call so an agent can hop between prod and staging
-  without restarting the server. List the configured profiles with
-  `thinr_profiles`.
+- **`profile`**: optional on every tool. Uses another configured server for
+  that call only; `thinr_profile_list` lists them.
+- **`user`**: optional admin impersonation; defaults to the profile's user.
+- Devices are named per call (`device`, or `parent` for a device's
+  resources): list them with `thinr_resource_list` type `device`.
 
 ### Integrating with Claude Code
 
@@ -580,9 +550,8 @@ Register the server once with the Claude Code CLI:
 claude mcp add thinr -s user -- thinr mcp
 ```
 
-That's it — a single MCP server entry handles every device of the
-active profile. Tool calls pass `device` (and optionally `user` /
-`profile`) per call.
+That's it: a single MCP server entry handles every device of every
+configured profile.
 
 ### Integrating with Claude Desktop, Cursor and other MCP hosts
 

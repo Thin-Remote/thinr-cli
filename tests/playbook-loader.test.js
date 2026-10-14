@@ -65,10 +65,7 @@ steps:
 
 describe('parsePlaybook — validation errors', () => {
     it('rejects invalid YAML with a descriptive message', () => {
-        assert.throws(
-            () => parsePlaybook('target: product: [unterminated'),
-            /Invalid YAML/,
-        );
+        assert.throws(() => parsePlaybook('target: product: [unterminated'), /Invalid YAML/);
     });
 
     it('rejects a root that is not a mapping', () => {
@@ -164,11 +161,11 @@ steps:
   - action: pull
     source: /tmp/x
     destination: local.txt
-  - action: rm
+  - action: delete
     path: /tmp/x
   - action: mkdir
     path: /tmp/d
-  - action: mv
+  - action: move
     source: /tmp/a
     destination: /tmp/b
   - action: property_set
@@ -191,9 +188,9 @@ steps:
             'write',
             'push',
             'pull',
-            'rm',
+            'delete',
             'mkdir',
-            'mv',
+            'move',
             'property_set',
             'resource',
             'update',

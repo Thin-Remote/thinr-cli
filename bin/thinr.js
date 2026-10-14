@@ -12,6 +12,7 @@ import { accent, info } from '@thinger-io/cli-core/format';
 import { mcpInstructions, thinrIdentity } from '../lib/identity.js';
 import { tools as mcpTools } from '../lib/mcp/registry.js';
 import { resourceHooks } from '../lib/mcp/resource-hooks.js';
+import { resourceActions, resourceTypes } from '../lib/mcp/resource-types.js';
 import { guides } from '../lib/guides.js';
 import { registerDeviceCommands } from '../commands/device/index.js';
 import { registerProductCommands } from '../commands/product/index.js';
@@ -37,6 +38,8 @@ await runCli({
     version: pkg.version,
     mcpTools,
     resourceHooks,
+    resourceTypes,
+    resourceActions,
     docs: guides,
     mcpInstructions,
     register(program, groups) {

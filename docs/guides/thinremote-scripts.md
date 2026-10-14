@@ -5,17 +5,21 @@ collect a health report) into a **resource**: something with a name and an
 input/output shape that tools, dashboards and other devices can call. Use one
 instead of `thinr_device_exec` whenever the operation will be repeated.
 
+Both kinds are resource types: `resource_list` / `_get` / `_create` /
+`_update` / `_delete` with type `device_script` (parent the device) or
+`product_script` (parent the product), the file name as id.
+
 Tool names below omit the `thinr_` prefix.
 
 ## Device scripts or product scripts
 
-|             | Device script                                                       | Product script                                                                                |
-| ----------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Lives in    | the device: `<agent base>/scripts/`                                 | the product's file storage: `scripts/`                                                        |
-| Reaches     | that device                                                         | every device of the product, current and future                                               |
-| Changing it | one write per device                                                | one write, effective on the next call everywhere                                              |
-| Tools       | `device_script_list`, `device_script_write`, `device_script_delete` | `product_script_list`, `product_script_read`, `product_script_write`, `product_script_delete` |
-| Called with | `device_resource_call` on that device                               | `device_resource_call` on any device of the product                                           |
+|             | Device script                         | Product script                                      |
+| ----------- | ------------------------------------- | --------------------------------------------------- |
+| Lives in    | the device: `<agent base>/scripts/`   | the product's file storage: `scripts/`              |
+| Reaches     | that device                           | every device of the product, current and future     |
+| Changing it | one write per device                  | one write, effective on the next call everywhere    |
+| Type        | `device_script`, parent the device    | `product_script`, parent the product                |
+| Called with | `device_resource_call` on that device | `device_resource_call` on any device of the product |
 
 Prefer **product scripts** for fleets: the code is downloaded on each call,
 so there is nothing to deploy and no drift between devices. Use a device
@@ -30,7 +34,8 @@ adding a service.
 
 ## Product scripts
 
-`product_script_write` does everything needed, idempotently: it creates the
+Creating one (`resource_create` type `product_script`, body `{content, input?, output?}`)
+does everything needed: it creates the
 product's storage if missing, writes the `index.js` wrapper the first time,
 links it as the product's code, uploads the script and creates or updates
 the product API resource, so the script is callable at once. The product must
@@ -85,10 +90,11 @@ print(json.dumps({"host": host, "reachable": ok}))
 
 ## Device scripts
 
-`device_script_write` writes the file in the agent's scripts folder, makes
-it executable and reloads the scripts extension (`$scripts/reload`), so the
-resource is callable at once. `device_script_list` shows each script with
-the schema it describes.
+Creating one (`resource_create` type `device_script`, body `{content}`)
+writes the file in the agent's scripts folder, makes it executable and
+reloads the scripts extension (`$scripts/reload`), so the resource is
+callable at once. `resource_list` shows each script with the schema it
+describes; `resource_get` adds its source.
 
 Contract:
 

@@ -14,15 +14,16 @@ Tool names below omit the `thinr_` prefix.
 
 A metric is a value thinr's dashboard asks every device of the product for,
 and combines across the fleet: free disk, connected clients, service version…
-They live in the `dashboard_metrics` product property; edit them with
-`product_metric_list`, `product_metric_write` (upsert by `name`) and
-`product_metric_delete`, not by writing the property by hand.
+They live in the `dashboard_metrics` product property; edit them as the
+resource type `product_metric` (parent the product, id the metric's name:
+`resource_list`, `_get`, `_create`, `_update`, `_delete`), not by writing the
+property by hand.
 
-Fields of `product_metric_write`:
+Fields of a metric:
 
 | Field           | Meaning                                                                                                  |
 | --------------- | -------------------------------------------------------------------------------------------------------- |
-| `name`          | Stable id (letters, digits, `_`, `-`); reusing it updates the metric                                     |
+| `name`          | Stable id (letters, digits, `_`, `-`): the resource id                                                   |
 | `label`         | Title in the panel                                                                                       |
 | `resource`      | Product API resource called on each device, usually a product script                                     |
 | `field`         | Dot path to the value in the response (`disk.used_pct`); omit for scalar responses                       |
@@ -41,15 +42,18 @@ A log source is a named shell command the agent streams when an operator
 opens a device's logs in thinr (`journalctl -f`, `docker logs -f app`,
 `tail -F /var/log/nginx/access.log`). They live in the `logs` product
 property; without it, products show a single `system` source running
-journalctl.
+journalctl (listed with `fallback: true`). They are the resource type
+`product_log_source`, parent the product, id the source's name.
 
-- `product_logs_add`: upsert a source by `name` (≤ 32 chars, letters, digits,
+- `resource_create`: a source by `name` (≤ 32 chars, letters, digits,
   `_`, `-`; up to 32 sources). The `command` is stored and run as is.
   `default: true` makes it the one shown first (and the one
   `thinr device logs` uses without `--source`).
-- Structured rendering: add a `preset` (`product_logs_presets` lists them:
+- Structured rendering: add a `preset` (`resource_describe` type
+  `product_log_source` lists them:
   journalctl, spdlog, nginx…) or your own `pattern`, a regex with named
   groups `time`, `level` and `msg`. With a `level` group, operators can filter
   by severity. `preset` and `pattern` are mutually exclusive.
-- `product_logs_set_default` picks the default; `product_logs_remove` drops a
-  source (removing the last one deletes the property, back to the fallback).
+- `resource_update` with `{"default": true}` picks the default;
+  `resource_delete` drops a source (removing the last one deletes the
+  property, back to the fallback).
