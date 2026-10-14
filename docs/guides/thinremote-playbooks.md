@@ -90,19 +90,22 @@ duration_ms }` to later steps), `pause_after` (seconds).
 
 Actions:
 
-| Action                             | Parameters (\* required)               | Does                                                       |
-| ---------------------------------- | -------------------------------------- | ---------------------------------------------------------- |
-| `exec`                             | `command`\*, `timeout`                 | runs a shell command; non-zero exit fails the step         |
-| `write`                            | `path`_, `content`_                    | writes inline content                                      |
-| `push` / `pull`                    | `source`_, `destination`_              | copies a file from / to the machine running the playbook   |
-| `mkdir`                            | `path`\*                               | creates a directory                                        |
-| `move`                             | `source`_, `destination`_, `overwrite` | moves; write to a temp file then `move` for atomic deploys |
-| `delete`                           | `path`\*, `recursive`                  | deletes                                                    |
-| `property_set`                     | `property`_, `value`_                  | sets a device property                                     |
-| `resource`                         | `resource`\*, `inputs`                 | calls a device resource                                    |
-| `script_install` / `script_delete` | `name`\*, `content` or `content_file`  | installs or removes a device script                        |
-| `update`                           | `op`\*, `channel`                      | checks for or applies an agent update                      |
-| `sleep`                            | `seconds`\*                            | waits                                                      |
+| Action                             | Required                | Optional                    | Does                                                       |
+| ---------------------------------- | ----------------------- | --------------------------- | ---------------------------------------------------------- |
+| `exec`                             | `command`               | `timeout`                   | runs a shell command; non-zero exit fails the step         |
+| `write`                            | `path`, `content`       |                             | writes inline content                                      |
+| `push` / `pull`                    | `source`, `destination` |                             | copies a file from / to the machine running the playbook   |
+| `mkdir`                            | `path`                  |                             | creates a directory                                        |
+| `move`                             | `source`, `destination` | `overwrite`                 | moves; write to a temp file then `move` for atomic deploys |
+| `delete`                           | `path`                  | `recursive`                 | deletes                                                    |
+| `property_set`                     | `property`, `value`     |                             | sets a device property                                     |
+| `resource`                         | `resource`              | `inputs`                    | calls a device resource                                    |
+| `script_install` / `script_delete` | `name`                  | `content` or `content_file` | installs or removes a device script                        |
+| `update`                           | `op`                    | `channel`                   | checks for or applies an agent update                      |
+| `sleep`                            | `seconds`               |                             | waits                                                      |
+
+Run from the MCP server, `push`, `pull` and `content_file` only reach files
+inside its local folder (`THINR_MCP_LOCAL_DIR`, or where it started).
 
 `check` cannot predict `exec` or `resource` steps: they report `unknown`.
 

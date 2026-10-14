@@ -77,9 +77,19 @@ describe('thinr resource types', () => {
 
     it('asks for a playbook to act on', async () => {
         await assert.rejects(
-            call('resource_call', { ...playbook, action: 'run', body: {} }),
+            call('resource_call', { ...playbook, action: 'run', body: { device: 'gw_1' } }),
             /give the playbook/,
         );
+        // A run needs exactly one target: never the whole product by omission.
+        for (const body of [
+            { content: PLAYBOOK },
+            { content: PLAYBOOK, device: 'a', group: 'g' },
+        ]) {
+            await assert.rejects(
+                call('resource_call', { ...playbook, action: 'run', body }),
+                /give one target in the body/,
+            );
+        }
         await assert.rejects(
             call('resource_call', { type: 'product_playbook', action: 'validate', body: {} }),
             /parent \(<product>\) is required/,
@@ -99,11 +109,28 @@ describe('thinr resource types', () => {
         assert.match(summary, /^device: .*\| .*agent_update agent_install\]$/m);
     });
 
+    it('validates unsaved playbook variables before running', async () => {
+        const withVars = PLAYBOOK.replace(
+            'steps:',
+            'vars:\n    port: { default: 8080, type: number, overridable: true }\nsteps:',
+        );
+        const run = (vars) =>
+            call('resource_call', {
+                ...playbook,
+                action: 'run',
+                body: { content: withVars, device: 'gw_1', dry_run: true, vars },
+            });
+        const plan = JSON.parse(textOf(await run({ port: 9090 })));
+        assert.equal(plan.vars.port, 9090);
+        await assert.rejects(run({ prot: 9090 }), /prot/);
+        await assert.rejects(run({ port: 'x' }), /port/);
+    });
+
     it('device_exec needs exactly one kind of target', async () => {
         await assert.rejects(call('device_exec', { command: 'uptime' }), /give the target/);
         await assert.rejects(
             call('device_exec', { command: 'uptime', device: 'a', product: 'p' }),
-            /give `device` for one device, or/,
+            /give one kind of target/,
         );
         await assert.rejects(call('device_exec', { device: 'a' }), /command is required/);
     });

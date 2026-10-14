@@ -679,7 +679,7 @@ The script only touches resources it creates itself (identified by
 the `playbook-e2e-` product-id prefix). If a run is interrupted
 before the `finally` cleanup executes — e.g. the process is killed
 — list leftovers with `thinr product list --json` and drop each one
-through the MCP `thinr_product_delete` tool (from an AI client) or
+through the MCP `thinr_resource_delete` tool with type `product` (from an AI client) or
 via a Node one-liner reusing `deleteProductWithStorage` from
 `lib/product.js`.
 
