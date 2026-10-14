@@ -54,7 +54,8 @@ so creating it is refused unless forced.
 A product groups the devices of a fleet and holds what they share. ThinRemote
 products are created with `resource_create` type `product` and come with
 `config.type: "thinremote"` and a `monitoring` bucket that stores each
-device's `monitoring` resource every 60 s (the history above). On top of the
+device's `monitoring` resource every 60 s (the history above; a device of
+another kind of product has no history unless its product gets that bucket). On top of the
 server's product, ThinRemote keeps these types, all with the product as
 parent:
 
