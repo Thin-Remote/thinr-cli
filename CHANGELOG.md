@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.5.0] - 2026-10-16
+
+### Added
+
+- Dashboard apps, from `@thinger-io/cli-core` 0.4.0: `thinr dashboard init`
+  (a TypeScript app from a template of `@thinger-io/dashboard-sdk`, with a
+  `thinr.json` and an AGENTS.md), `thinr dashboard dev` (a link that opens
+  the app on its own dev server against the server, with a temporary
+  token) and `thinr dashboard publish`; MCP tools `thinr_dashboard_init`
+  and `thinr_dashboard_dev` (26 tools).
+- `THINR_TOKEN` (an access token) and `THINR_SERVER` replace the saved
+  profile in every command and the MCP server (CI), unless `--profile` or
+  `THINR_PROFILE` names one.
+
+### Changed
+
+- Requires `@thinger-io/cli-core` 0.4.0.
+- The platform's guides (`concepts`, `product-code`, `server-admin`,
+  `dashboard-sdk`, `dashboard-sdk-types`) ship with the CLI and the SDK
+  package instead of coming from the server, which stops serving `/sdk/`.
+
 ## [1.4.0] - 2026-10-14
 
 Incompatible change of the MCP tools: thinr is now the generic core it

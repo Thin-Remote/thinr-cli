@@ -29,7 +29,7 @@ describe('mcp registry', () => {
             thinrTools.map((t) => t.name),
             ['device_exec'],
         );
-        assert.equal(tools.length, 24);
+        assert.equal(tools.length, 26);
     });
 
     it('serves its resource types and actions through the generic tools', () => {
