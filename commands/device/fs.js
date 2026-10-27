@@ -13,7 +13,7 @@ import { applyJsonFlag, ensureConfigured, getGlobalUser } from './_shared.js';
  */
 export function registerFsCommands(device) {
     device
-        .command('ls <deviceId> [path]')
+        .command('ls <device> [path]')
         .helpGroup('Filesystem:')
         .description('List a directory on the device')
         .option('-j, --json', 'Output as JSON')
@@ -46,7 +46,7 @@ export function registerFsCommands(device) {
         });
 
     device
-        .command('read <deviceId> <path>')
+        .command('read <device> <path>')
         .alias('cat')
         .helpGroup('Filesystem:')
         .description('Print the contents of a remote file to stdout')
@@ -72,7 +72,7 @@ export function registerFsCommands(device) {
         });
 
     device
-        .command('write <deviceId> <path> [content]')
+        .command('write <device> <path> [content]')
         .helpGroup('Filesystem:')
         .description(
             'Write inline content to a remote file (use `push` for large local files). Reads from stdin when <content> is omitted.',
@@ -111,7 +111,7 @@ export function registerFsCommands(device) {
         });
 
     device
-        .command('mkdir <deviceId> <path>')
+        .command('mkdir <device> <path>')
         .helpGroup('Filesystem:')
         .description('Create a directory on the device')
         .option('-j, --json', 'Output as JSON')
@@ -133,7 +133,7 @@ export function registerFsCommands(device) {
         });
 
     device
-        .command('rm <deviceId> <path>')
+        .command('rm <device> <path>')
         .helpGroup('Filesystem:')
         .description(
             'Delete a file or directory on the device (pass --recursive for directories with contents)',
@@ -159,7 +159,7 @@ export function registerFsCommands(device) {
         });
 
     device
-        .command('mv <deviceId> <source> <destination>')
+        .command('mv <device> <source> <destination>')
         .helpGroup('Filesystem:')
         .description('Move or rename a file or directory on the device')
         .option('-j, --json', 'Output as JSON')

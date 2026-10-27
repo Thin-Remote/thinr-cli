@@ -20,10 +20,19 @@ function stringifyMetricLine(m) {
     return `${m.name}  ${parts.join('  ')}${trail}`;
 }
 
+/**
+ * `thinr product metric list|set|delete` — the metrics thinr's terminal
+ * dashboard shows for a product (its `dashboard_metrics` property).
+ */
 export function registerProductMetricCommands(product) {
-    product
-        .command('metric-list <productId>')
+    const metric = product
+        .command('metric')
         .helpGroup('Product config:')
+        .description("Dashboard metrics of a product (thinr's terminal dashboard)");
+
+    metric
+        .command('list <product>')
+        .helpGroup('Records:')
         .description('List dashboard metrics configured on a product')
         .option('-j, --json', 'Output as JSON')
         .action(async (productId, opts, cmd) => {
@@ -48,9 +57,9 @@ export function registerProductMetricCommands(product) {
             }
         });
 
-    product
-        .command('metric-set <productId> <name>')
-        .helpGroup('Product config:')
+    metric
+        .command('set <product> <name>')
+        .helpGroup('Records:')
         .description('Add or update a dashboard metric on a product')
         .requiredOption('-r, --resource <resource>', 'Product API resource the dashboard invokes')
         .option('-l, --label <label>', 'Human-readable label for the metric')
@@ -59,13 +68,10 @@ export function registerProductMetricCommands(product) {
             '-a, --aggregation <agg>',
             'Aggregation across the fleet (sum, avg, max, min, count, top, none, distribution)',
         )
-        .option(
-            '-v, --visualization <viz>',
-            'Dashboard rendering hint (kpi, bar, sparkline, list)',
-        )
+        .option('-v, --visualization <viz>', 'Dashboard rendering hint (kpi, bar, sparkline, list)')
         .option('-i, --interval <seconds>', 'Dashboard refresh interval in seconds', Number)
         .option('--unit <unit>', 'Unit suffix for display (e.g. "%", "devices")')
-        .option('--json', 'Output as JSON')
+        .option('-j, --json', 'Output as JSON')
         .action(async (productId, name, opts, cmd) => {
             applyJsonFlag(opts);
             ensureConfigured();
@@ -96,9 +102,9 @@ export function registerProductMetricCommands(product) {
             }
         });
 
-    product
-        .command('metric-delete <productId> <name>')
-        .helpGroup('Product config:')
+    metric
+        .command('delete <product> <name>')
+        .helpGroup('Records:')
         .description('Remove a dashboard metric from a product')
         .option('-j, --json', 'Output as JSON')
         .action(async (productId, name, opts, cmd) => {

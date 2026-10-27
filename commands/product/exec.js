@@ -28,7 +28,7 @@ import {
 
 export function registerProductExecCommand(product) {
     product
-        .command('exec <productId> <command...>')
+        .command('exec <product> <command...>')
         .helpGroup('Fan-out:')
         .description(
             'Execute a shell command in parallel on every active device of the product',

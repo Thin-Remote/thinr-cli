@@ -88,7 +88,7 @@ function makeTransferBar(totalBytes) {
  */
 export function registerTransferCommands(device) {
     device
-        .command('push <deviceId> <localPath> <remotePath>')
+        .command('push <device> <local-path> <remote-path>')
         .helpGroup('Filesystem:')
         .description('Upload a local file to the device (use trailing "/" on remote to keep the source basename)')
         .option('-j, --json', 'Output as JSON')
@@ -167,7 +167,7 @@ export function registerTransferCommands(device) {
         });
 
     device
-        .command('pull <deviceId> <remotePath> <localPath>')
+        .command('pull <device> <remote-path> <local-path>')
         .helpGroup('Filesystem:')
         .description('Download a remote file from the device to local disk')
         .option('-j, --json', 'Output as JSON')

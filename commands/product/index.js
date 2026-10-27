@@ -10,10 +10,11 @@ import { registerProductPlaybookCommand } from './playbook.js';
 import { registerProductLogsCommand } from './logs.js';
 
 /**
- * `thinr product <subcommand> <productId> …` — fan-out commands across
- * every device that belongs to a product, plus metrics, scripts and
- * playbooks, added to the generic `product` group of @thinger-io/cli-core
- * (list, info, create, delete, property-list/get/set/delete).
+ * `thinr product <verb> <product> …` — fan-out commands across every device
+ * that belongs to a product (status, exec, files, device-property,
+ * device-resource), plus its metrics, log sources and playbooks, added to
+ * the generic `product` group of @thinger-io/cli-core (records,
+ * properties, profile, export, apply).
  */
 export function registerProductCommands(product) {
     registerProductStatusCommand(product);

@@ -28,7 +28,7 @@ import {
 
 export function registerProductPushCommand(product) {
     product
-        .command('push <productId> <localPath> <remotePath>')
+        .command('push <product> <local-path> <remote-path>')
         .helpGroup('Filesystem:')
         .description('Upload a local file to every active device of a product, in parallel')
         .option('-j, --json', 'Output as JSON')

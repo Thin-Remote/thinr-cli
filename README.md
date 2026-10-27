@@ -28,8 +28,9 @@ task at hand.
 - [Global options and environment variables](#global-options-and-environment-variables)
 - [Part 1 — CLI](#part-1--cli)
     - [JSON output](#json-output)
-    - [`thinr device <action> [<deviceId>]`](#thinr-device-action-deviceid)
-    - [`thinr product <action> <productId>`](#thinr-product-action-productid)
+    - [`thinr device`](#thinr-device)
+    - [`thinr product`](#thinr-product)
+    - [`thinr agent`](#thinr-agent)
     - [`thinr playbook <action>`](#thinr-playbook-action)
     - [`thinr profile`](#thinr-profile)
     - [`thinr logout`](#thinr-logout)
@@ -95,13 +96,18 @@ These apply to every subcommand:
 
 ## Part 1 — CLI
 
-All device- and product-scoped actions follow a **subcommand-first**
-shape: the action comes before the target id, matching patterns like
-`kubectl describe pod <name>` or `git remote add <name> <url>`.
+Every command follows one grammar, shared with the `thinger` CLI: nouns
+first, then a verb, then the ids from the outermost to the innermost, then
+the options (`thinr device property get <device> <property>`). Records
+take the same verbs everywhere (`list`, `get`, `create`, `update`,
+`delete`, `clone`, `set`, `describe`), a body comes from `--from <file>`
+and `-s, --set key=value`, and `-j, --json` gives the JSON envelope below.
+`thinr --help` lists the nouns; `thinr <noun> --help` their verbs.
 
 ```
-thinr device <action>  <deviceId>  [args…] [options]
-thinr product <action> <productId> [args…] [options]
+thinr device <verb> <device> [args…] [options]
+thinr product <verb> <product> [args…] [options]
+thinr device property <verb> <device> <property> [options]
 ```
 
 ### JSON output
@@ -138,35 +144,33 @@ don't change their behaviour — they don't produce a discrete result.
 `exec` buffers stdout/stderr when `--json` is set and emits a single
 envelope on exit.
 
-### `thinr device <action> [<deviceId>]`
+### `thinr device`
 
-Most actions take a `<deviceId>` as their first positional. The `list`
-action is the exception — it operates on the fleet, with an optional
-`<pattern>` to filter results.
+Most verbs take a `<device>` as their first positional; `list` works on
+the whole account.
 
 #### `list`
 
-List every device visible to the active profile, or filter with a
-case-insensitive regex (matched against device id and name on the
-server side):
+List every device visible to the active profile, or search and filter
+them on the server:
 
 ```bash
-thinr device list                    # every device
-thinr device list supermicro         # only ids/names containing "supermicro"
-thinr device list "^revpi|jetson"    # regex alternation works too
-thinr device list --json             # JSON envelope with the raw API records
+thinr device list                              # every device
+thinr device list --search supermicro          # ids/names containing "supermicro"
+thinr device list --filter product=my-product  # filters are repeatable
+thinr device list --json                       # JSON envelope with the raw API records
 ```
 
 Combine with the global `-u, --user` flag for admin impersonation.
 
-#### Records — `info` / `create` / `delete` / `set-product`
+#### Records — `get` / `create` / `update` / `delete` / `set-product`
 
 ```bash
-thinr device info <deviceId>                       # server record as JSON
-thinr device create <deviceId> [-t Generic|MQTT|HTTP|Virtual|Subdevice] [-p product]
-thinr device delete <deviceId> [-y]
-thinr device set-product <deviceId> <productId>    # "" to unassign
-thinr device property-set <deviceId> <property> <json>
+thinr device get <device>                          # server record as JSON (-f <path> for one field)
+thinr device create <device> [-t Generic|MQTT|HTTP|Virtual|Subdevice] [-p product] [-n name]
+thinr device update <device> -s name="Boiler 1"
+thinr device delete <device> [-y]
+thinr device set-product <device> <product>        # "" to unassign
 ```
 
 `create` generates random credentials for Generic/MQTT devices unless
@@ -177,7 +181,7 @@ thinr device property-set <deviceId> <property> <json>
 Open an interactive terminal on the device:
 
 ```bash
-thinr device console <deviceId>
+thinr device console <device>
 ```
 
 #### Proxies — `tcp` / `tls` / `http`
@@ -186,9 +190,9 @@ Create a TCP, TLS, or HTTP proxy to a remote endpoint reachable from
 the device:
 
 ```bash
-thinr device tcp  <deviceId> [target] [options]
-thinr device tls  <deviceId> [target] [options]
-thinr device http <deviceId> [target] [options]
+thinr device tcp  <device> [target] [options]
+thinr device tls  <device> [target] [options]
+thinr device http <device> [target] [options]
 ```
 
 `target` is the remote address and port on the device side. Defaults
@@ -216,24 +220,24 @@ thinr device http RevPi20679 http://192.168.1.45:8080
 #### `status`
 
 ```bash
-thinr device status <deviceId> [-j, --json]
+thinr device status <device> [-j, --json]
 ```
 
 Returns the device's connection stats (uptime, tx/rx, last-seen).
 
 #### `property`
 
-List every property of a device, or read one by id:
+The properties of a device are records of their own:
 
 ```bash
-thinr device property <deviceId>                                # list
-thinr device property <deviceId> <propertyId> [options]         # read
+thinr device property list <device>
+thinr device property get  <device> <property> [-f value.threshold]
+thinr device property set  <device> <property> '{"threshold": 30}'   # created when missing
+thinr device property delete <device> <property> [-y]
 ```
 
-Options:
-
-- `-j, --json`: Output as JSON
-- `-f, --field <path>`: Extract a sub-field via dot path (`-f data.value`)
+`-f, --field <path>` prints one field of the record: the value of a
+property is under `value`.
 
 #### `resource`
 
@@ -241,22 +245,21 @@ List the resources exposed by the device (with their `in`/`out`
 schemas when advertised), or call one:
 
 ```bash
-thinr device resource <deviceId>                                # list
-thinr device resource <deviceId> <resourceId> [options]         # call
+thinr device resource list <device>
+thinr device resource call <device> <resource>                 # read its output
+thinr device resource call <device> <resource> -s value=true   # run it with an input
 ```
 
-Options:
-
-- `-i, --input <key=value>`: Resource input (repeatable)
-- `-j, --json`: Output as JSON
-- `-f, --field <path>`: Extract a sub-field from the result (dot path)
+`call` takes the input from `--from <file>` (`-` for stdin) and
+`-s, --set key=value` (repeatable, values parsed as JSON when they are),
+and prints the answer, or one field of it with `-f, --field <path>`.
 
 #### `exec`
 
 Run a shell command on the device and stream stdout/stderr back:
 
 ```bash
-thinr device exec <deviceId> "<command>" [options]
+thinr device exec <device> "<command>" [options]
 ```
 
 Options:
@@ -267,28 +270,18 @@ Options:
 
 The process exits with the remote command's exit code.
 
-#### `update`
+### `thinr product`
 
-Check for or apply an agent update on the device:
+Besides its records (`list`, `get`, `create`, `update`, `delete`,
+`export`, `apply`, `profile`…), a product fans operations out across
+every device that belongs to it.
 
-```bash
-thinr device update check <deviceId> [options]
-thinr device update apply <deviceId> [options]
-```
+#### `device-property`
 
-Options:
-
-- `--channel <name>`: Update channel (default: `latest`)
-- `-j, --json`: Output as JSON
-
-### `thinr product <action> <productId>`
-
-Fan out an operation across every device that belongs to a product.
-
-#### `property`
+Read a property on every device of the product:
 
 ```bash
-thinr product property <productId> <propertyId> [options]
+thinr product device-property <product> <property> [options]
 ```
 
 Options:
@@ -299,10 +292,12 @@ Options:
 - `-a, --all`: Include offline devices (default: only active)
 - `-g, --group <group>`: Filter devices by asset group
 
-#### `resource`
+#### `device-resource`
+
+Call a resource on every active device of the product:
 
 ```bash
-thinr product resource <productId> <resource> [options]
+thinr product device-resource <product> <resource> [options]
 ```
 
 Options:
@@ -310,10 +305,28 @@ Options:
 - `-j, --json`: Output as JSON (`results[]` array, same shape as above)
 - `-f, --field <path>`: Extract a sub-field from each result (dot path)
 - `-g, --group <group>`: Filter devices by asset group
-- `-i, --input <key=value>`: Resource input (repeatable)
+- `--from <file>`, `-s, --set <key=value>`: Resource input (`-s` is
+  repeatable)
 
-Offline devices are skipped for `resource` — the server would reject
-the call anyway.
+Offline devices are skipped for `device-resource` — the server would
+reject the call anyway.
+
+#### `metric` and `logs`
+
+What thinr's terminal dashboard shows for the devices of a product:
+
+```bash
+thinr product metric list   <product>
+thinr product metric set    <product> <name> [options]
+thinr product metric delete <product> <name>
+
+thinr product logs presets                         # patterns shipped with thinr
+thinr product logs list        <product>
+thinr product logs get         <product> <name>
+thinr product logs create      <product> <name> [options]
+thinr product logs delete      <product> <name>
+thinr product logs set-default <product> <name>
+```
 
 #### `exec`
 
@@ -322,7 +335,7 @@ product and report a per-device status table plus each device's
 output:
 
 ```bash
-thinr product exec <productId> <command...> [options]
+thinr product exec <product> <command...> [options]
 ```
 
 Options:
@@ -359,11 +372,11 @@ Manage playbooks stored on a product and run them against one device
 or the whole fleet:
 
 ```bash
-thinr product playbook list     <productId> [--json]
-thinr product playbook upload   <productId> <name> [file] [--description <text>] [--skip-validation] [--json]
-thinr product playbook download <productId> <name> [-o <file>] [--json]
-thinr product playbook delete   <productId> <name> [--json]
-thinr product playbook run      <productId> <name> (--device <id> | --fleet) [options]
+thinr product playbook list     <product> [--json]
+thinr product playbook upload   <product> <name> [file] [--description <text>] [--skip-validation] [--json]
+thinr product playbook download <product> <name> [-o <file>] [--json]
+thinr product playbook delete   <product> <name> [--json]
+thinr product playbook run      <product> <name> (--device <id> | --fleet) [options]
 ```
 
 `upload` reads the YAML from a file, or from stdin when the path is
@@ -399,6 +412,28 @@ Each fleet rollout writes a persistent JSON report to
 `playbooks/runs/<timestamp>-<name>-<user>.json` in the product's file
 storage, capturing resolved variables, per-device outcomes, and any
 abort reason.
+
+### `thinr agent`
+
+The ThinRemote agent running on the devices: check whether a device has a
+newer release, and update one device or the whole fleet.
+
+```bash
+thinr agent check  <device> [--channel latest] [-j]
+thinr agent update <device> [--channel latest] [-j]
+thinr agent update --all [-p <product>] [-g <group>] [options]
+```
+
+`update --all` updates every outdated device: a canary first, then in
+batches. Options (only with `--all`):
+
+- `-p, --product <id>`, `-g, --group <id>` — narrow the fleet.
+- `--batch-size <n>` — devices updated in parallel once the canary
+  passes (default: 5).
+- `--no-canary` — everything in batches from the start.
+- `--continue-on-error` — keep rolling after a batch failure.
+- `--dry-run` — list what would be updated, without updating it.
+- `-y, --yes` — no confirmation (required in non-interactive shells).
 
 ### `thinr playbook <action>`
 
@@ -611,16 +646,17 @@ Use `thinr profile use <name>` to change the persisted default, or
 ```
 thinr-cli/
 ├── bin/           # CLI entry point (thinr)
-├── commands/      # ThinRemote subcommands (agent, fleet, playbooks…)
+├── commands/      # ThinRemote subcommands (agent, device, product, playbooks…)
 ├── lib/           # ThinRemote modules: identity, device-api, proxy,
 │                  # console, playbooks, product scripts, MCP tools…
 ├── package.json
 └── README.md
 ```
 
-The generic part — API client, auth, profiles, REST helpers, the generic
-commands (login, logout, profile, device list/info/property/resource,
-product list/property-\_, bucket) and the generic MCP tools — comes from
+The generic part — API client, auth, profiles, REST helpers, the command
+grammar, the generic commands (login, logout, profile, api, the records of
+every resource type, device resource, bucket, storage…) and the generic MCP
+tools — comes from
 [@thinger-io/cli-core](https://github.com/thinger-io/cli-core), shared
 with the `thinger` CLI. `lib/identity.js` is what makes it `thinr`: names,
 `~/.config/thinr-cli`, `THINR\__`, the OAuth client and the product

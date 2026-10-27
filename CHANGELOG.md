@@ -1,5 +1,74 @@
 # Changelog
 
+## [1.6.0] - 2026-10-27
+
+Every command follows one grammar, the one of `@thinger-io/cli-core` 0.5.0
+shared with the `thinger` CLI, noun first:
+`thinr <noun> [<noun>…] <verb> [<parent ids>…] [<id>] [options]`. Nouns
+nest under their parent (`device property`, `product metric`), ids are
+positional and named after their noun (`<device>`, `<product>`), and the
+options keep one meaning everywhere (`-j` JSON, `-s` a body field, `-f` one
+field of the answer, `-o` a file, `-y` no questions). Several commands of
+1.5 change form: see the table below. The old forms are gone, not aliased.
+The MCP tools do not change.
+
+### Added
+
+- `thinr agent check <device>` and `thinr agent update <device>`, and
+  `thinr agent update --all` for the whole fleet (with the options of the
+  old `fleet upgrade`: `-p`, `-g`, `--batch-size`, `--no-canary`,
+  `--continue-on-error`, `--dry-run`, `-y`).
+- From `@thinger-io/cli-core` 0.5.0: commands for every resource type
+  (`list|get|create|update|delete|clone|describe`, `set` on every kind of
+  property, the type's actions), `thinr api <path>`,
+  `thinr bucket write|export`, `thinr storage file list|upload|download|delete`,
+  `thinr device send|overview`, `thinr device resource list|call`,
+  `thinr product apply --from`, `thinr product profile api call`,
+  `thinr plugin call`; `--search`, `--filter`, `--count` and `--index` on
+  `device list`, `product list` and `bucket list`.
+
+### Changed (breaking)
+
+| 1.5                                                     | 1.6                                                         |
+| ------------------------------------------------------- | ----------------------------------------------------------- |
+| `thinr device list <pattern>`                           | `thinr device list --search <text>`                         |
+| `thinr device info <device>`                            | `thinr device get <device>`                                 |
+| `thinr device property <device>`                        | `thinr device property list <device>`                       |
+| `thinr device property <device> <prop>`                 | `thinr device property get <device> <property>`             |
+| `thinr device property-set <device> <p> <v>`            | `thinr device property set <device> <property> <value>`     |
+| `thinr device resource <device>`                        | `thinr device resource list <device>`                       |
+| `thinr device resource <device> <r> -i k=v`             | `thinr device resource call <device> <resource> -s k=v`     |
+| `thinr device update check <device>`                    | `thinr agent check <device>`                                |
+| `thinr device update apply <device>`                    | `thinr agent update <device>`                               |
+| `thinr fleet upgrade [options]`                         | `thinr agent update --all [options]`                        |
+| `thinr product info <product>`                          | `thinr product get <product>`                               |
+| `thinr product property-list <product>`                 | `thinr product property list <product>`                     |
+| `thinr product property-get <product> <p>`              | `thinr product property get <product> <property>`           |
+| `thinr product property-set <product> <p> <v>`          | `thinr product property set <product> <property> <value>`   |
+| `thinr product property-delete <product> <p>`           | `thinr product property delete <product> <property> -y`     |
+| `thinr product property <product> <prop>` (fan-out)     | `thinr product device-property <product> <property>`        |
+| `thinr product resource <product> <r> -i k=v` (fan-out) | `thinr product device-resource <product> <resource> -s k=v` |
+| `thinr product metric-list <product>`                   | `thinr product metric list <product>`                       |
+| `thinr product metric-set <product> <name>`             | `thinr product metric set <product> <name>`                 |
+| `thinr product metric-delete <product> <name>`          | `thinr product metric delete <product> <name>`              |
+| `thinr product logs add <product> <name>`               | `thinr product logs create <product> <name>`                |
+| `thinr product logs show <product> <name>`              | `thinr product logs get <product> <name>`                   |
+| `thinr product logs remove\|rm <product> <name>`        | `thinr product logs delete <product> <name>`                |
+
+- `thinr fleet` is gone: `agent update --all` took its only command.
+- `device property get` and `product property get` print the property
+  record, with its value under `value`: `-f` paths start there
+  (`-f value.setpoint` where 1.5 took `-f setpoint`). `product property
+  delete` asks unless `-y`.
+- `device resource call` and `product device-resource` take their input
+  from `--from <file>` and `-s, --set key=value` (`-i` is gone); `-s`
+  values are parsed as JSON when they are.
+- `product metric set` takes `-j, --json` (it took only `--json`).
+- The help groups the root commands as Resources, Administration,
+  Configuration, Integration and Operations, and the verbs of a noun as
+  Records, Data, Actions and Subresources, before thinr's own groups.
+- Requires `@thinger-io/cli-core` 0.5.0.
+
 ## [1.5.0] - 2026-10-16
 
 ### Added

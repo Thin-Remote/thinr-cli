@@ -4,7 +4,7 @@ import { ensureConfigured, runInteractive } from './_shared.js';
 
 export function registerConsoleCommand(device) {
     device
-        .command('console <deviceId>')
+        .command('console <device>')
         .helpGroup('Remote access:')
         .description('Open an interactive terminal on the device')
         .action((deviceId) =>

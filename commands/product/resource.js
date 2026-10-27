@@ -9,68 +9,68 @@ import {
     createSpinner,
     classifyError,
 } from '@thinger-io/cli-core/output';
-import {
-    applyJsonFlag,
-    collectInput,
-    ensureConfigured,
-    extractField,
-    getGlobalUser,
-} from '../_shared.js';
+import { bodyFromOptions, bodyOptions } from '@thinger-io/cli-core/commands/_shared';
+import { applyJsonFlag, ensureConfigured, extractField, getGlobalUser } from '../_shared.js';
 import { fetchProductDevices } from './_shared.js';
 
 export function registerProductResourceCommand(product) {
-    product
-        .command('resource <productId> <resource>')
-        .helpGroup('Fan-out:')
-        .description('Call a resource on every active device of the product')
-        .option('-j, --json', 'Output as JSON')
-        .option('-f, --field <field>', 'Extract a sub-field from each result (dot path)')
-        .option('-g, --group <group>', 'Filter devices by asset group')
-        .option('-i, --input <key=value>', 'Resource input (repeatable)', collectInput, {})
-        .action(async (productId, resource, opts, cmd) => {
-            applyJsonFlag(opts);
-            ensureConfigured();
-            const user = getGlobalUser(cmd);
-            const spinner = createSpinner(`Retrieving devices for product ${productId}...`).start();
-            let devices;
-            try {
-                devices = await fetchProductDevices(productId, opts.group, user);
-                spinner.succeed(`Devices for product ${productId} retrieved successfully`);
-            } catch (error) {
-                spinner.fail(`Failed to retrieve devices for product ${productId}`);
-                const { message, code } = classifyError(error);
-                printErr(message, { code });
-                return;
-            }
-            devices = filterActiveDevices(devices);
+    bodyOptions(
+        product
+            .command('device-resource <product> <resource>')
+            .helpGroup('Fan-out:')
+            .description(
+                'Call a resource on every active device of the product: with --from or --set it runs it with that input; without, it reads its output',
+            )
+            .option('-j, --json', 'Output as JSON')
+            .option('-f, --field <field>', 'Extract a sub-field from each result (dot path)')
+            .option('-g, --group <group>', 'Filter devices by asset group'),
+    ).action(async (productId, resource, opts, cmd) => {
+        applyJsonFlag(opts);
+        ensureConfigured();
+        const user = getGlobalUser(cmd);
+        let input;
+        try {
+            input = await bodyFromOptions(opts);
+        } catch (error) {
+            const { message, code } = classifyError(error);
+            printErr(message, { code });
+            return;
+        }
+        const spinner = createSpinner(`Retrieving devices for product ${productId}...`).start();
+        let devices;
+        try {
+            devices = await fetchProductDevices(productId, opts.group, user);
+            spinner.succeed(`Devices for product ${productId} retrieved successfully`);
+        } catch (error) {
+            spinner.fail(`Failed to retrieve devices for product ${productId}`);
+            const { message, code } = classifyError(error);
+            printErr(message, { code });
+            return;
+        }
+        devices = filterActiveDevices(devices);
 
-            const results = [];
-            for (const device of devices) {
-                try {
-                    const result = await callDeviceResource(device.device, resource, opts.input);
-                    const value = extractField(result, opts.field);
-                    results.push({ device: device.device, ok: true, data: value });
-                    if (!isJsonMode()) {
-                        console.log(
-                            'Device',
-                            info(device.device),
-                            'resource',
-                            info(resource),
-                        );
-                        console.log(value);
-                    }
-                } catch (error) {
-                    const { message, code } = classifyError(error);
-                    results.push({ device: device.device, ok: false, error: { message, code } });
-                    if (!isJsonMode()) {
-                        console.error(
-                            errorStyle(
-                                `Error executing resource ${resource} for device ${device.device}: ${message}`,
-                            ),
-                        );
-                    }
+        const results = [];
+        for (const device of devices) {
+            try {
+                const result = await callDeviceResource(device.device, resource, input, { user });
+                const value = extractField(result, opts.field);
+                results.push({ device: device.device, ok: true, data: value });
+                if (!isJsonMode()) {
+                    console.log('Device', info(device.device), 'resource', info(resource));
+                    console.log(value);
+                }
+            } catch (error) {
+                const { message, code } = classifyError(error);
+                results.push({ device: device.device, ok: false, error: { message, code } });
+                if (!isJsonMode()) {
+                    console.error(
+                        errorStyle(
+                            `Error executing resource ${resource} for device ${device.device}: ${message}`,
+                        ),
+                    );
                 }
             }
-            if (isJsonMode()) printOk({ product: productId, resource, results });
-        });
+        }
+        if (isJsonMode()) printOk({ product: productId, resource, results });
+    });
 }

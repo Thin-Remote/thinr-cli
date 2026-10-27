@@ -17,9 +17,8 @@ function truncate(value, max = 60) {
 }
 
 function registerList(logs) {
-    logs
-        .command('list <productId>')
-        .helpGroup('Log sources:')
+    logs.command('list <product>')
+        .helpGroup('Records:')
         .description('List the log sources configured on a product')
         .option('-j, --json', 'Output as JSON')
         .action(async (productId, opts, cmd) => {
@@ -73,12 +72,14 @@ function registerList(logs) {
         });
 }
 
-function registerAdd(logs) {
-    logs
-        .command('add <productId> <name>')
-        .helpGroup('Log sources:')
+function registerCreate(logs) {
+    logs.command('create <product> <name>')
+        .helpGroup('Records:')
         .description('Add or replace a log source on a product')
-        .requiredOption('-c, --command <cmd>', 'Shell command the agent should exec-stream for this source')
+        .requiredOption(
+            '-c, --command <cmd>',
+            'Shell command the agent should exec-stream for this source',
+        )
         .option('--default', 'Mark this source as the active default')
         .option(
             '--pattern <regex>',
@@ -115,7 +116,8 @@ function registerAdd(logs) {
                 );
                 console.log(`  ${muted('command:')} ${truncate(opts.command, 80)}`);
                 if (opts.preset) console.log(`  ${muted('preset:')} ${opts.preset}`);
-                if (opts.pattern) console.log(`  ${muted('pattern:')} ${truncate(opts.pattern, 80)}`);
+                if (opts.pattern)
+                    console.log(`  ${muted('pattern:')} ${truncate(opts.pattern, 80)}`);
                 console.log(
                     `  ${muted('total sources:')} ${config.sources.length}${
                         config.default ? `  ${muted('default:')} ${config.default}` : ''
@@ -128,11 +130,9 @@ function registerAdd(logs) {
         });
 }
 
-function registerRemove(logs) {
-    logs
-        .command('remove <productId> <name>')
-        .alias('rm')
-        .helpGroup('Log sources:')
+function registerDelete(logs) {
+    logs.command('delete <product> <name>')
+        .helpGroup('Records:')
         .description('Remove a log source from a product (idempotent)')
         .option('-j, --json', 'Output as JSON')
         .action(async (productId, name, opts, cmd) => {
@@ -152,9 +152,7 @@ function registerRemove(logs) {
                     return;
                 }
                 if (!removed) {
-                    console.log(
-                        `Source ${info(name)} was not configured on ${info(productId)}.`,
-                    );
+                    console.log(`Source ${info(name)} was not configured on ${info(productId)}.`);
                     return;
                 }
                 if (config === null) {
@@ -175,9 +173,8 @@ function registerRemove(logs) {
 }
 
 function registerSetDefault(logs) {
-    logs
-        .command('set-default <productId> <name>')
-        .helpGroup('Log sources:')
+    logs.command('set-default <product> <name>')
+        .helpGroup('Actions:')
         .description('Set the active default source on a product')
         .option('-j, --json', 'Output as JSON')
         .action(async (productId, name, opts, cmd) => {
@@ -200,10 +197,9 @@ function registerSetDefault(logs) {
         });
 }
 
-function registerShow(logs) {
-    logs
-        .command('show <productId> <name>')
-        .helpGroup('Log sources:')
+function registerGet(logs) {
+    logs.command('get <product> <name>')
+        .helpGroup('Records:')
         .description('Show a single log source (full command, untruncated)')
         .option('-j, --json', 'Output as JSON')
         .action(async (productId, name, opts, cmd) => {
@@ -235,7 +231,9 @@ function registerShow(logs) {
                     });
                     return;
                 }
-                console.log(`${label('Source')}: ${info(source.name)}${isDefault ? ` ${muted('(default)')}` : ''}`);
+                console.log(
+                    `${label('Source')}: ${info(source.name)}${isDefault ? ` ${muted('(default)')}` : ''}`,
+                );
                 console.log(`${label('Command')}: ${source.command}`);
                 if (source.preset) console.log(`${label('Preset')}: ${source.preset}`);
                 if (source.pattern) console.log(`${label('Pattern')}: ${source.pattern}`);
@@ -248,9 +246,8 @@ function registerShow(logs) {
 }
 
 function registerPresets(logs) {
-    logs
-        .command('presets')
-        .helpGroup('Log sources:')
+    logs.command('presets')
+        .helpGroup('Records:')
         .description('List the named log line patterns shipped with the CLI')
         .option('-j, --json', 'Output as JSON')
         .action(async (opts) => {
@@ -275,15 +272,13 @@ function registerPresets(logs) {
 export function registerProductLogsCommand(product) {
     const logs = product
         .command('logs')
-        .helpGroup('Log sources:')
-        .description(
-            `Manage log sources stored on a product. ${hint('Subcommands: list, add, remove, set-default, show, presets.')}`,
-        );
+        .helpGroup('Product config:')
+        .description('Log sources of a product: the commands `thinr device logs` streams');
 
     registerList(logs);
-    registerAdd(logs);
-    registerRemove(logs);
+    registerGet(logs);
+    registerCreate(logs);
+    registerDelete(logs);
     registerSetDefault(logs);
-    registerShow(logs);
     registerPresets(logs);
 }

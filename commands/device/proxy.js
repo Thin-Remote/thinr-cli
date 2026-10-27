@@ -4,7 +4,7 @@ import { ensureConfigured, runInteractive } from './_shared.js';
 
 export function registerProxyCommands(device) {
     device
-        .command('tcp <deviceId> [target]')
+        .command('tcp <device> [target]')
         .helpGroup('Remote access:')
         .description('Create a TCP proxy (no TLS). Default target: 22.')
         .option('-p, --port <port>', 'Local port to use (default: random)')
@@ -16,7 +16,7 @@ export function registerProxyCommands(device) {
         );
 
     device
-        .command('tls <deviceId> [target]')
+        .command('tls <device> [target]')
         .helpGroup('Remote access:')
         .description('Create a TLS proxy. Default target: 443.')
         .option('-p, --port <port>', 'Local port to use (default: random)')
@@ -28,7 +28,7 @@ export function registerProxyCommands(device) {
         );
 
     device
-        .command('http <deviceId> [target]')
+        .command('http <device> [target]')
         .helpGroup('Remote access:')
         .description('Create an HTTP proxy. Default target: 80.')
         .option('-p, --port <port>', 'Local port to use (default: random)')

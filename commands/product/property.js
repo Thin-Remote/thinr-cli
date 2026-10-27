@@ -9,17 +9,12 @@ import {
     createSpinner,
     classifyError,
 } from '@thinger-io/cli-core/output';
-import {
-    applyJsonFlag,
-    ensureConfigured,
-    extractField,
-    getGlobalUser,
-} from '../_shared.js';
+import { applyJsonFlag, ensureConfigured, extractField, getGlobalUser } from '../_shared.js';
 import { fetchProductDevices } from './_shared.js';
 
 export function registerProductPropertyCommand(product) {
     product
-        .command('property <productId> <propertyId>')
+        .command('device-property <product> <property>')
         .helpGroup('Fan-out:')
         .description('Read a property on every device of the product')
         .option('-j, --json', 'Output as JSON')
@@ -46,16 +41,11 @@ export function registerProductPropertyCommand(product) {
             const results = [];
             for (const device of devices) {
                 try {
-                    const property = await getDeviceProperty(device.device, propertyId);
+                    const property = await getDeviceProperty(device.device, propertyId, user);
                     const value = extractField(property, opts.field);
                     results.push({ device: device.device, ok: true, data: value });
                     if (!isJsonMode()) {
-                        console.log(
-                            'Device',
-                            info(device.device),
-                            'property',
-                            info(propertyId),
-                        );
+                        console.log('Device', info(device.device), 'property', info(propertyId));
                         if (opts.field) console.log(value);
                         else console.log(formatDeviceProperty(device.device, propertyId, property));
                     }

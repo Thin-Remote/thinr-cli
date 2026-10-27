@@ -184,7 +184,7 @@ export function registerProductFsCommands(product) {
     registerProductFsCommand(product, {
         name: 'mkdir',
         description: 'Create a directory on every active device of the product',
-        args: '<productId> <path>',
+        args: '<product> <path>',
         perDeviceLabel: ([path]) => `mkdir ${path}`,
         build: async (api, [path]) => {
             await api.mkdir(path);
@@ -195,7 +195,7 @@ export function registerProductFsCommands(product) {
         name: 'rm',
         description:
             'Delete a file or directory on every active device of the product (DESTRUCTIVE — double-check the path).',
-        args: '<productId> <path>',
+        args: '<product> <path>',
         perDeviceLabel: ([path]) => `rm ${path}`,
         build: async (api, [path], opts) => {
             await api.delete(path, opts.recursive !== false);
@@ -209,7 +209,7 @@ export function registerProductFsCommands(product) {
     registerProductFsCommand(product, {
         name: 'mv',
         description: 'Move or rename a path on every active device of the product',
-        args: '<productId> <source> <destination>',
+        args: '<product> <source> <destination>',
         perDeviceLabel: ([src, dst]) => `mv ${src} → ${dst}`,
         build: async (api, [src, dst], opts) => {
             await api.move(src, dst, !!opts.force);

@@ -47,7 +47,7 @@ async function readAllStdin() {
 
 function registerList(playbook) {
     playbook
-        .command('list <productId>')
+        .command('list <product>')
         .helpGroup('Playbooks:')
         .description('List playbooks registered on a product')
         .option('-j, --json', 'Output as JSON')
@@ -83,7 +83,7 @@ function registerList(playbook) {
 
 function registerUpload(playbook) {
     playbook
-        .command('upload <productId> <name> [file]')
+        .command('upload <product> <name> [file]')
         .helpGroup('Playbooks:')
         .description(
             'Upload a playbook YAML to a product (reads stdin when <file> is omitted or "-")',
@@ -153,7 +153,7 @@ function registerUpload(playbook) {
 
 function registerDownload(playbook) {
     playbook
-        .command('download <productId> <name>')
+        .command('download <product> <name>')
         .helpGroup('Playbooks:')
         .description('Download a playbook YAML by name (writes to stdout by default)')
         .option('-o, --output <file>', 'Write to a local file instead of stdout')
@@ -200,7 +200,7 @@ function registerDownload(playbook) {
 
 function registerDelete(playbook) {
     playbook
-        .command('delete <productId> <name>')
+        .command('delete <product> <name>')
         .helpGroup('Playbooks:')
         .description('Delete a playbook from a product (idempotent)')
         .option('-j, --json', 'Output as JSON')
@@ -772,7 +772,7 @@ async function runFleet({ productId, name, pb, overrides, resolvedScope, user, o
 
 function registerRun(playbook) {
     playbook
-        .command('run <productId> <name>')
+        .command('run <product> <name>')
         .helpGroup('Playbooks:')
         .description('Run a product playbook against one device or the whole fleet (progressive rollout)')
         .option('-d, --device <id>', 'Target device ID (single-device mode)')

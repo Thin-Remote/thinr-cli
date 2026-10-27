@@ -62,7 +62,7 @@ async function resolveProductSource({ deviceId, sourceName, user }) {
 
 export function registerLogsCommand(device) {
     device
-        .command('logs <deviceId>')
+        .command('logs <device>')
         .helpGroup('Observability:')
         .description('Stream or tail device logs (journalctl by default, or a file path)')
         .option('-f, --follow', 'Keep streaming until interrupted (Ctrl+C)')

@@ -9,12 +9,17 @@ import {
 } from '@thinger-io/cli-core/output';
 import { label as labelText, accent } from '@thinger-io/cli-core/format';
 import { TIMEOUTS } from '../../lib/constants.js';
-import { applyJsonFlag, ensureConfigured, getGlobalUser } from './_shared.js';
 
-const runUpdate = async (action, deviceId, opts, cmd) => {
-    applyJsonFlag(opts);
-    ensureConfigured();
-    const user = getGlobalUser(cmd);
+/**
+ * Ask the agent of one device to check for a release (`check`) or to
+ * install it (`apply`), through its `update` resource.
+ *
+ * @param {'check' | 'apply'} action
+ * @param {string} deviceId
+ * @param {{ channel?: string }} opts
+ * @param {string | null} user
+ */
+export async function runDeviceUpdate(action, deviceId, opts, user) {
     const channel = opts.channel || 'latest';
     const phase = action === 'check' ? 'Checking for updates' : 'Applying update';
     const spinner = createSpinner(`${phase} on ${deviceId}...`).start();
@@ -40,25 +45,4 @@ const runUpdate = async (action, deviceId, opts, cmd) => {
         const { message, code } = classifyError(error);
         printErr(message, { code });
     }
-};
-
-export function registerUpdateCommand(device) {
-    const update = device
-        .command('update')
-        .helpGroup('Execution:')
-        .description('Check for or apply agent updates');
-
-    update
-        .command('check <deviceId>')
-        .description('Check if an agent update is available')
-        .option('-j, --json', 'Output as JSON')
-        .option('--channel <name>', 'Update channel (default: latest)')
-        .action((deviceId, opts, cmd) => runUpdate('check', deviceId, opts, cmd));
-
-    update
-        .command('apply <deviceId>')
-        .description('Apply an agent update')
-        .option('-j, --json', 'Output as JSON')
-        .option('--channel <name>', 'Update channel (default: latest)')
-        .action((deviceId, opts, cmd) => runUpdate('apply', deviceId, opts, cmd));
 }

@@ -29,7 +29,7 @@ import { fetchProductDevices } from './_shared.js';
 
 export function registerProductStatusCommand(product) {
     product
-        .command('status <productId>')
+        .command('status <product>')
         .helpGroup('Discovery:')
         .description('Snapshot of every device in the product (status + monitoring)')
         .option('-j, --json', 'Output as JSON')
