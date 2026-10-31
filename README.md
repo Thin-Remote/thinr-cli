@@ -318,13 +318,13 @@ What thinr's terminal dashboard shows for the devices of a product:
 ```bash
 thinr product metric list   <product>
 thinr product metric set    <product> <name> [options]
-thinr product metric delete <product> <name>
+thinr product metric delete <product> <name> [-y]
 
 thinr product logs presets                         # patterns shipped with thinr
 thinr product logs list        <product>
 thinr product logs get         <product> <name>
 thinr product logs create      <product> <name> [options]
-thinr product logs delete      <product> <name>
+thinr product logs delete      <product> <name> [-y]
 thinr product logs set-default <product> <name>
 ```
 
@@ -375,7 +375,7 @@ or the whole fleet:
 thinr product playbook list     <product> [--json]
 thinr product playbook upload   <product> <name> [file] [--description <text>] [--skip-validation] [--json]
 thinr product playbook download <product> <name> [-o <file>] [--json]
-thinr product playbook delete   <product> <name> [--json]
+thinr product playbook delete   <product> <name> [-y] [--json]
 thinr product playbook run      <product> <name> (--device <id> | --fleet) [options]
 ```
 

@@ -4,6 +4,7 @@ import { InvalidArgumentError } from 'commander';
 // is the name thinr's subcommands have always used for its `runCommand`.
 export {
     applyJsonFlag,
+    confirmDestructive,
     ensureConfigured,
     extractField,
     getGlobalUser,

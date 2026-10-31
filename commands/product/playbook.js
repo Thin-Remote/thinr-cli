@@ -32,6 +32,7 @@ import { classifyError, createSpinner, isJsonMode, printErr, printOk } from '@th
 import {
     applyJsonFlag,
     collectKeyValue,
+    confirmDestructive,
     ensureConfigured,
     getGlobalUser,
     parsePositiveInt,
@@ -203,11 +204,15 @@ function registerDelete(playbook) {
         .command('delete <product> <name>')
         .helpGroup('Playbooks:')
         .description('Delete a playbook from a product (idempotent)')
+        .option('-y, --yes', 'Do not ask for confirmation')
         .option('-j, --json', 'Output as JSON')
         .action(async (productId, name, opts, cmd) => {
             applyJsonFlag(opts);
             ensureConfigured();
             const user = getGlobalUser(cmd);
+            if (!(await confirmDestructive(opts, `Delete playbook ${name} from ${productId}?`))) {
+                return;
+            }
             const spinner = createSpinner(`Deleting playbook ${name} from ${productId}...`).start();
             try {
                 const result = await deleteProductPlaybook({ product: productId, name, user });

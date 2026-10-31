@@ -60,6 +60,8 @@ The MCP tools do not change.
   record, with its value under `value`: `-f` paths start there
   (`-f value.setpoint` where 1.5 took `-f setpoint`). `product property
   delete` asks unless `-y`.
+- `product metric delete`, `product logs delete` and
+  `product playbook delete` ask for confirmation too: scripts pass `-y`.
 - `device resource call` and `product device-resource` take their input
   from `--from <file>` and `-s, --set key=value` (`-i` is gone); `-s`
   values are parsed as JSON when they are.

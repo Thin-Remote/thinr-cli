@@ -6,7 +6,7 @@ import {
 } from '../../lib/product.js';
 import { info, success } from '@thinger-io/cli-core/format';
 import { isJsonMode, printOk, printErr, classifyError } from '@thinger-io/cli-core/output';
-import { applyJsonFlag, ensureConfigured, getGlobalUser } from '../_shared.js';
+import { applyJsonFlag, confirmDestructive, ensureConfigured, getGlobalUser } from '../_shared.js';
 
 function stringifyMetricLine(m) {
     const parts = [
@@ -106,11 +106,15 @@ export function registerProductMetricCommands(product) {
         .command('delete <product> <name>')
         .helpGroup('Records:')
         .description('Remove a dashboard metric from a product')
+        .option('-y, --yes', 'Do not ask for confirmation')
         .option('-j, --json', 'Output as JSON')
         .action(async (productId, name, opts, cmd) => {
             applyJsonFlag(opts);
             ensureConfigured();
             const user = getGlobalUser(cmd);
+            if (!(await confirmDestructive(opts, `Remove metric ${name} from ${productId}?`))) {
+                return;
+            }
             try {
                 const { action, count } = await removeDashboardMetric(productId, name, user);
                 if (isJsonMode()) {

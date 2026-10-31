@@ -9,7 +9,7 @@ import {
 } from '../../lib/product/logs.js';
 import { hint, info, label, muted, success } from '@thinger-io/cli-core/format';
 import { classifyError, isJsonMode, printErr, printOk } from '@thinger-io/cli-core/output';
-import { applyJsonFlag, ensureConfigured, getGlobalUser } from '../_shared.js';
+import { applyJsonFlag, confirmDestructive, ensureConfigured, getGlobalUser } from '../_shared.js';
 
 function truncate(value, max = 60) {
     if (typeof value !== 'string') return '';
@@ -134,11 +134,15 @@ function registerDelete(logs) {
     logs.command('delete <product> <name>')
         .helpGroup('Records:')
         .description('Remove a log source from a product (idempotent)')
+        .option('-y, --yes', 'Do not ask for confirmation')
         .option('-j, --json', 'Output as JSON')
         .action(async (productId, name, opts, cmd) => {
             applyJsonFlag(opts);
             ensureConfigured();
             const user = getGlobalUser(cmd);
+            if (!(await confirmDestructive(opts, `Remove log source ${name} from ${productId}?`))) {
+                return;
+            }
             try {
                 const { removed, config } = await removeLogSource(productId, name, user);
                 if (isJsonMode()) {
