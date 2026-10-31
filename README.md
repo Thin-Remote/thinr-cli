@@ -12,7 +12,7 @@ Two operating modes:
 
 - **CLI** — interactive or scripted device management from a shell.
 - **MCP server** — a stdio [Model Context Protocol][mcp] server that
-  exposes the same operations as 24 typed tools for AI clients like
+  exposes the same operations as eight resource tools for AI clients like
   Claude Code, Claude Desktop and Cursor.
 
 Both modes share the same auth, profiles, and device API layer, so
@@ -362,9 +362,9 @@ thinr product exec my-product "apt-get -y upgrade" -c 5 --timeout 600
 thinr product exec my-product "systemctl restart agent" -g staging
 ```
 
-Also exposed to MCP clients as `thinr_device_exec` with `product` (and
-`group`), so agents run a fleet operation with a single call instead of
-looping per device.
+Also exposed to MCP clients as the `exec` action of type `device` with
+body `product` (and `group`), so agents run a fleet operation with a
+single call instead of looping per device.
 
 #### `playbook`
 
@@ -482,7 +482,7 @@ active profile; `--server`, `--username` and `--token` skip the prompts.
 ## Part 2 — MCP server
 
 `thinr` ships an [MCP][mcp] server for AI clients (Claude Code, Claude
-Desktop, Cursor and any other MCP host): 24 tools that reach everything the
+Desktop, Cursor and any other MCP host): eight tools that reach everything the
 CLI does, through the same API, with stable schemas and one error contract.
 
 ### Starting the server
@@ -500,37 +500,47 @@ device of any configured environment without a restart.
 ### Tools
 
 thinr is built on [`@thinger-io/cli-core`][cli-core], the core it shares
-with the `thinger` CLI, and serves its 23 generic tools with the `thinr_`
-prefix plus one of its own:
+with the `thinger` CLI, and serves its eight tools with the `thinr_`
+prefix: `thinr_resource_describe`, `_list`, `_get`, `_create`, `_update`,
+`_delete`, `_clone` and `_call` (actions). Each takes a `type` and the
+record's `ids`, one key per level (`{"device": "gw_1"}`,
+`{"device": "gw_1", "path": "/etc/hosts"}`,
+`{"product": "gateways", "playbook": "app-config"}`); the records they
+answer carry their ids.
 
-| Tools                                                                                                                                                                       | What for                                                                                                                                                                                                |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `thinr_resource_describe`, `_list`, `_get`, `_create`, `_update`, `_delete`, `_clone`, `_call`                                                                              | Every resource type: the server's and ThinRemote's (below), and their actions                                                                                                                           |
-| `thinr_device_resource_list`, `thinr_device_resource_call`                                                                                                                  | What a connected device exposes: agent resources (`monitoring`, `cmd`…) and its scripts                                                                                                                 |
-| `thinr_bucket_data_read`, `thinr_bucket_data_write`                                                                                                                         | Time series, monitoring history included (bucket `monitoring`)                                                                                                                                          |
-| `thinr_storage_file_*`, `thinr_dashboard_init` / `_dev` / `_publish`, `thinr_plugin_call`, `thinr_product_resource_call`, `thinr_device_data_send`, `thinr_device_overview` | Storages, web dashboards (create, develop against the server, publish), plugins, product APIs, HTTP devices, account usage                                                                              |
-| `thinr_doc_read`, `thinr_profile_list`                                                                                                                                      | Guides for agents (`thinremote`, `thinremote-scripts`, `thinremote-playbooks`, `thinremote-metrics-logs`, and the platform's: `concepts`, `product-code`, `server-admin`, `dashboard-sdk`) and profiles |
-| `thinr_device_exec`                                                                                                                                                         | A shell command on one device, or on several at once (`devices`, `product`, `group`, `all`)                                                                                                             |
+| Types                                                                  | What for                                                                                                                                                                                                            |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The server's (`device`, `product`, `bucket`, `token`, `alarm_rule`…)   | Every resource of the account and their actions                                                                                                                                                                     |
+| `device_resource` (list; action `call`)                                | What a connected device exposes: agent resources (`monitoring`, `cmd`…) and its scripts                                                                                                                             |
+| `bucket_data` (list reads, create writes)                              | Time series, monitoring history included (bucket `monitoring`)                                                                                                                                                      |
+| `storage_file`; `dashboard` actions `init` / `dev` / `publish`; others | Storages, web dashboards (create, develop against the server, publish), plugins (`plugin` `call`), product APIs (`product_profile_api` `call`), HTTP devices (`device` `send`), account usage (`device` `overview`) |
+| `doc`, `profile`                                                       | Guides for agents (`thinremote`, `thinremote-scripts`, `thinremote-playbooks`, `thinremote-metrics-logs`, and the platform's: `concepts`, `product-code`, `server-admin`, `dashboard-sdk`) and profiles             |
 
-ThinRemote adds its own resource types to the generic tools, so they are
-listed, read, written and deleted like a device or a token:
+ThinRemote adds its own resource types, listed, read, written and deleted
+like a device or a token:
 
-| Type                 | Parent  | What it is                                                                     | Actions (`thinr_resource_call`) |
-| -------------------- | ------- | ------------------------------------------------------------------------------ | ------------------------------- |
-| `device_fs`          | device  | Files and folders of the device (id: the path)                                 | `move`, `push`, `pull`          |
-| `device_script`      | device  | Scripts of the agent, each a resource of the device                            |                                 |
-| `product_script`     | product | Scripts run on any device of the product, kept once in its storage             |                                 |
-| `product_metric`     | product | Metrics of thinr's terminal dashboard                                          |                                 |
-| `product_log_source` | product | Log sources an operator streams from a device                                  |                                 |
-| `product_playbook`   | product | Playbooks: YAML steps validated, tried on one device and rolled out in batches | `validate`, `run`, `rollout`    |
+| Type               | ids                   | What it is                                                                     | Actions (`thinr_resource_call`) |
+| ------------------ | --------------------- | ------------------------------------------------------------------------------ | ------------------------------- |
+| `device_fs`        | `device`, `path`      | Files and folders of the device                                                | `move`, `push`, `pull`          |
+| `device_script`    | `device`, `script`    | Scripts of the agent, each a resource of the device                            |                                 |
+| `product_script`   | `product`, `script`   | Scripts run on any device of the product, kept once in its storage             |                                 |
+| `product_playbook` | `product`, `playbook` | Playbooks: YAML steps validated, tried on one device and rolled out in batches | `validate`, `run`, `rollout`    |
 
-and two actions to the server's `device` type: `agent_update` (check for or
-install a new agent) and `agent_install` (the command that installs the
-agent on a new machine). Live monitoring is the device resource
-`monitoring`; its history, the bucket `monitoring`.
+and three actions to the server's `device` type: `exec` (a shell command
+on one device, `ids.device`, or on several at once: body `devices`,
+`product`, `group`, `all`), `agent_update` (check for or install a new
+agent) and `agent_install` (the command that installs the agent on a new
+machine). Live monitoring is the device resource `monitoring`; its
+history, the bucket `monitoring`. The fleet metrics and log sources of
+thinr's terminal dashboard are the product properties `dashboard_metrics`
+and `logs`, checked before they are written.
 
-Full input schemas come with the standard MCP `tools/list`, and
-`thinr_resource_describe` gives each type's fields and actions.
+`exec` on several devices, playbook runs on several devices and rollouts
+answer their targets first and run with `confirm: true` (clients that
+support elicitation ask the user instead). `thinr mcp --read-only` (or
+`THINR_MCP_READ_ONLY=1`) serves only what reads. Full input schemas come
+with the standard MCP `tools/list`, and `thinr_resource_describe` gives
+each type's ids, fields, actions and examples.
 
 [cli-core]: https://github.com/thinger-io/thinger-cli-core
 
@@ -548,15 +558,16 @@ writing YAML by hand:
 2. **Draft and validate.** Write the YAML and call `thinr_resource_call`
    type `product_playbook`, action `validate`, with it in `body.content`;
    fix what it reports until it is clean.
-3. **Save.** `thinr_resource_create` type `product_playbook`, parent the
-   product, id a short name, body `{content}`. It is validated again and
-   nothing is saved if invalid.
-4. **Pre-flight on one device.** Action `run` with the playbook's id and
+3. **Save.** `thinr_resource_create` type `product_playbook`, ids
+   `{"product", "playbook": <a short name>}`, body `{content}`. It is
+   validated again and nothing is saved if invalid.
+4. **Pre-flight on one device.** Action `run` with `ids.playbook` and
    `body.device`, with `dry_run: true` or `check: true` for a read-only
    preview, then for real.
 5. **Roll out.** Action `rollout` runs it across the fleet in batches with a
    failure-rate stop, and writes a report to `playbooks/runs/` in the
-   product storage.
+   product storage. It answers its plan first and runs with
+   `confirm: true` once the user agrees.
 
 Example prompt:
 
@@ -572,10 +583,10 @@ A second message like "looks good, roll it out to staging" maps to the
 ### Per-call controls
 
 - **`profile`**: optional on every tool. Uses another configured server for
-  that call only; `thinr_profile_list` lists them.
+  that call only; `thinr_resource_list` type `profile` lists them.
 - **`user`**: optional admin impersonation; defaults to the profile's user.
-- Devices are named per call (`device`, or `parent` for a device's
-  resources): list them with `thinr_resource_list` type `device`.
+- Devices are named per call (`ids.device`): list them with
+  `thinr_resource_list` type `device`.
 
 ### Integrating with Claude Code
 

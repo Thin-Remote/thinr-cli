@@ -5,12 +5,18 @@ Thinger.io server. Each machine runs **thinr-agent**, which connects to the
 server as a device and lets you operate it remotely: files, commands,
 scripts, monitoring, logs.
 
-Almost everything is a **resource type** behind the generic tools
-`resource_list` / `_get` / `_create` / `_update` / `_delete` and
-`resource_call` (its actions), described by `resource_describe`: the
-server's types (device, product, bucket, property, token, alarm…; read the
-server's `concepts` guide with `doc_read`) and ThinRemote's, below. The one
-tool of its own is `device_exec`, for shell commands.
+Everything is a **resource type** behind eight tools: `resource_list` /
+`_get` / `_create` / `_update` / `_delete` / `_clone` and `resource_call`
+(its actions), described by `resource_describe`: the server's types
+(device, product, bucket, property, token, alarm…; read the server's
+`concepts` guide with `resource_get` type `doc`, ids `{"doc": "concepts"}`),
+data and files (`bucket_data`, `storage_file`, `device_resource`) and
+ThinRemote's, below. Shell commands are the `exec` action of type `device`.
+
+Each call names the record with `ids`, one key per level:
+`{"device": "gw_1"}`, `{"device": "gw_1", "path": "/etc/hosts"}`,
+`{"product": "gateways", "playbook": "app-config"}`. The records the tools
+answer carry their `ids`: pass them back as they are.
 
 Tool names below omit the `thinr_` prefix.
 
@@ -26,20 +32,20 @@ to system paths.
 
 What the agent offers, and how to reach it:
 
-| Need                                        | How                                                                                                                             |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Run a shell command                         | `device_exec` with `device` (output and exit code; `timeout` in s)                                                              |
-| List a folder                               | `resource_list` type `device_fs`, parent the device, `filter: {"path": "/var/log"}`                                             |
-| Read a file                                 | `resource_get` type `device_fs`, parent the device, id the path                                                                 |
-| Write a file / create a folder              | `resource_create` (or `_update`) type `device_fs`, body `{"content": "…"}` / `{"type": "directory"}`                            |
-| Delete a file or folder                     | `resource_delete` type `device_fs`                                                                                              |
-| Move, or copy binaries from/to this machine | `resource_call` type `device_fs`, action `move`, `push` or `pull`                                                               |
-| CPU, memory, disk, network, load: now       | `device_resource_call` resource `monitoring`                                                                                    |
-| The same, as history                        | `bucket_data_read` bucket `monitoring` with `device` (fields such as `cpu.usage`, `memory.usage`, `disk.root.usage`, `load.1m`) |
-| A reusable, typed operation on one device   | type `device_script` (see `thinremote-scripts`)                                                                                 |
-| Call what the agent or a script exposes     | `device_resource_list`, `device_resource_call`                                                                                  |
-| Update the agent                            | `resource_call` type `device`, action `agent_update`, body `{"action": "check"}` or `{"action": "apply"}`                       |
-| Install the agent on a new machine          | `resource_call` type `device`, action `agent_install` (a shell one-liner; no id)                                                |
+| Need                                        | How                                                                                                                                                                |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Run a shell command                         | `resource_call` type `device`, action `exec`, ids `{"device"}`, body `{"command": "…"}` (output and exit code)                                                     |
+| List a folder                               | `resource_list` type `device_fs`, ids `{"device"}`, `filter: {"path": "/var/log"}`                                                                                 |
+| Read a file                                 | `resource_get` type `device_fs`, ids `{"device", "path"}`                                                                                                          |
+| Write a file / create a folder              | `resource_create` (or `_update`) type `device_fs`, body `{"content": "…"}` / `{"type": "directory"}`                                                               |
+| Delete a file or folder                     | `resource_delete` type `device_fs`                                                                                                                                 |
+| Move, or copy binaries from/to this machine | `resource_call` type `device_fs`, action `move`, `push` or `pull`                                                                                                  |
+| CPU, memory, disk, network, load: now       | `resource_call` type `device_resource`, action `call`, ids `{"device", "resource": "monitoring"}`                                                                  |
+| The same, as history                        | `resource_list` type `bucket_data`, ids `{"bucket": "monitoring"}`, filter `{"device"}` (fields such as `cpu.usage`, `memory.usage`, `disk.root.usage`, `load.1m`) |
+| A reusable, typed operation on one device   | type `device_script` (see `thinremote-scripts`)                                                                                                                    |
+| Call what the agent or a script exposes     | `resource_list` type `device_resource`; `resource_call` type `device_resource`, action `call`                                                                      |
+| Update the agent                            | `resource_call` type `device`, action `agent_update`, body `{"action": "check"}` or `{"action": "apply"}`                                                          |
+| Install the agent on a new machine          | `resource_call` type `device`, action `agent_install` (a shell one-liner; no ids)                                                                                  |
 
 Paths are absolute on the device. `/` on its own lists the agent's working
 directory (normally the root, reported as `fs_base_path`); nothing is
@@ -56,18 +62,20 @@ products are created with `resource_create` type `product` and come with
 `config.type: "thinremote"` and a `monitoring` bucket that stores each
 device's `monitoring` resource every 60 s (the history above; a device of
 another kind of product has no history unless its product gets that bucket). On top of the
-server's product, ThinRemote keeps these types, all with the product as
-parent:
+server's product, ThinRemote keeps these, all under the product (ids
+`{"product", …}`):
 
-| Type                 | What it is                                                                    | Where it lives                                                             | Guide                     |
-| -------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------- |
-| `product_script`     | Code run on any device of the product, kept in one place                      | file storage named like the product, `scripts/`; one product API resource  | `thinremote-scripts`      |
-| `product_playbook`   | Ordered steps rolled out across devices; actions `validate`, `run`, `rollout` | same storage, `playbooks/<name>.yaml`, indexed in the `playbooks` property | `thinremote-playbooks`    |
-| `product_metric`     | Metrics for thinr's terminal dashboard                                        | `dashboard_metrics` product property                                       | `thinremote-metrics-logs` |
-| `product_log_source` | Log sources for thinr (dashboard, `thinr device logs`)                        | `logs` product property                                                    | `thinremote-metrics-logs` |
+| Type or property                       | What it is                                                                    | Where it lives                                                             | Guide                     |
+| -------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------- |
+| `product_script` (ids.script)          | Code run on any device of the product, kept in one place                      | file storage named like the product, `scripts/`; one product API resource  | `thinremote-scripts`      |
+| `product_playbook` (ids.playbook)      | Ordered steps rolled out across devices; actions `validate`, `run`, `rollout` | same storage, `playbooks/<name>.yaml`, indexed in the `playbooks` property | `thinremote-playbooks`    |
+| `product_property` `dashboard_metrics` | Metrics for thinr's terminal dashboard (an array, written whole)              | that product property                                                      | `thinremote-metrics-logs` |
+| `product_property` `logs`              | Log sources for thinr (dashboard, `thinr device logs`; written whole)         | that product property                                                      | `thinremote-metrics-logs` |
 
-Creating one that already exists fails (update it instead), and updating one
-that does not exist fails too, as with the server's types.
+Creating a script or playbook that already exists fails (update it
+instead), and updating one that does not exist fails too, as with the
+server's types. The two product properties are checked before they are
+written: `resource_describe` type `product_property` shows their shape.
 
 Deleting a product with `resource_delete` also deletes its file storage (its
 scripts and playbooks).
@@ -78,17 +86,19 @@ Devices join a product when they are created with `product`, with
 
 ## Fleet operations
 
-| Need                                       | How                                                                                                     |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| Same command on many devices, once         | `device_exec` with `devices`, `product` (and `group`) or `all: true`; `dry_run` lists the targets first |
-| Same file on every device                  | a playbook with a `write` step (to a temporary file, then `move`), rolled out                           |
-| A repeatable, versioned change with checks | a playbook: action `run` on one device, then action `rollout`                                           |
-| A value from every device                  | a product script + `device_resource_call` per device, or a metric                                       |
-| Which devices are online                   | `resource_list` type `device` with `filter: {"product": "<id>"}`                                        |
-| Fleet health at a glance                   | `bucket_data_read` bucket `monitoring` without `device`, `group_by` device                              |
+| Need                                       | How                                                                                                                                       |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Same command on many devices, once         | `resource_call` type `device`, action `exec`, no ids, body `devices`, `product` (and `group`) or `all: true`; `dry_run` lists the targets |
+| Same file on every device                  | a playbook with a `write` step (to a temporary file, then `move`), rolled out                                                             |
+| A repeatable, versioned change with checks | a playbook: action `run` on one device, then action `rollout`                                                                             |
+| A value from every device                  | a product script + `device_resource` `call` per device, or a metric                                                                       |
+| Which devices are online                   | `resource_list` type `device` with `filter: {"product": "<id>"}`                                                                          |
+| Fleet health at a glance                   | `resource_list` type `bucket_data`, ids `{"bucket": "monitoring"}`, filter `{"group_by": "device"}`                                       |
 
 Offline devices are skipped unless asked (`include_offline`). Commands on
-several devices and rollouts act at once: confirm with the user first.
+several devices, playbook runs on several devices and rollouts answer
+their targets first: show them to the user and call again with
+`confirm: true` in the body once they agree.
 
 ## Recipes
 
@@ -100,8 +110,9 @@ command on the machine → the device appears (autoprovisioned or created) →
 
 **Expose a health check for the whole fleet.** Write it once as a product
 script (`resource_create` type `product_script`, output-only, JSON on
-stdout) → call it on a device with `device_resource_call` to check it →
-register a metric over it (`resource_create` type `product_metric`) so
+stdout) → call it on a device (`resource_call` type `device_resource`,
+action `call`) to check it → add a metric over it to the product property
+`dashboard_metrics` (read it, append, `resource_update` the whole array) so
 thinr's dashboard aggregates it across the fleet.
 
 **Change a config file on every machine, safely.** `resource_describe` type
@@ -111,6 +122,6 @@ action `run` on one device with `check: true`, then for real → action
 `rollout` with a small `batch_size`.
 
 **Investigate one machine.** `resource_get` type `device` (agent info) →
-`device_resource_call` resource `monitoring` → `device_exec` for specifics →
+`device_resource` `call` of `monitoring` → the `exec` action for specifics →
 `resource_get` type `device_fs` for log files, or the product's log sources
 with `thinr device logs`.

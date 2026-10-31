@@ -10,9 +10,9 @@ Tool names below omit the `thinr_` prefix.
 
 ## Authoring flow
 
-A saved playbook is a resource of type `product_playbook`, with the product
-as parent and its name as id; validating, running and rolling it out are
-its actions (`resource_call`).
+A saved playbook is a resource of type `product_playbook`, ids
+`{"product", "playbook"}` (its name); validating, running and rolling it
+out are its actions (`resource_call`).
 
 1. `resource_describe` type `product_playbook` once: its `playbook_format`
    is the full schema (document, `vars`, step fields, every action with its
@@ -24,15 +24,17 @@ its actions (`resource_call`).
    saved if invalid; it writes `playbooks/<name>.yaml` in the product storage
    and registers it in the `playbooks` product property). Change it later
    with `resource_update`.
-4. Try it on one device: action `run` with the playbook's `id` and
+4. Try it on one device: action `run` with the playbook in `ids.playbook` and
    `body.device`, first with `dry_run: true` (the resolved plan, no device
    contacted), then `check: true` (contacts the device read-only: each step
    says changed / unchanged / unknown), then for real.
 5. Roll it out: action `rollout` (below).
 
-For a one-off run that is not worth saving, action `run` without `id` takes
-the YAML in `body.content`, with the same `dry_run` and `check`; it targets
-`body.device`, `body.devices`, `body.group` or every device of the product.
+For a one-off run that is not worth saving, action `run` without
+`ids.playbook` takes the YAML in `body.content`, with the same `dry_run`
+and `check`; it targets `body.device`, `body.devices`, `body.group` or every
+device of the product (`body.all`). On several devices it answers its
+targets first, and runs with `confirm: true` in the body.
 
 `resource_list` and `resource_get` show what a product has (`get` includes
 the YAML); `resource_delete` removes one (index entry, then file).
@@ -111,17 +113,19 @@ inside its local folder (`THINR_MCP_LOCAL_DIR`, or where it started).
 
 ## Rolling out
 
-Action `rollout` (`resource_call` type `product_playbook`, the playbook's
-`id`) runs a saved playbook on every matching device of the product, in batches of `body.batch_size` (default 5). A batch finishes before
+Action `rollout` (`resource_call` type `product_playbook`, the playbook in
+`ids.playbook`) runs a saved playbook on every matching device of the product, in batches of `body.batch_size` (default 5). A batch finishes before
 the next starts; after each one the cumulative failure rate is compared
 with `body.failure_threshold` (default 10 %), and reaching it stops the rollout
 without touching the remaining devices. Narrow the targets with `group` or
 `filter`; offline devices are skipped unless `include_offline`. `dry_run`
 lists the plan and the devices; `check` reports what would change.
+Without `dry_run` or `check` it answers that plan first: show it to the
+user and call again with `confirm: true` in the body once they agree.
 
 Each rollout writes a report to `playbooks/runs/<timestamp>-<name>-<user>.json`
-in the product storage (read it with `storage_file_read`, storage named like
-the product): resolved variables, per-device outcome, and why it stopped if
+in the product storage (read it with `resource_get` type `storage_file`,
+ids `{"storage": <the product's id>, "file": "playbooks/runs/…"}`): resolved variables, per-device outcome, and why it stopped if
 it did. A rollout that stops does not undo the devices it already changed:
 write files to a temporary path and `move` them into place, so a device is
 never left with half a change.

@@ -5,8 +5,12 @@ its terminal dashboard (`thinr` with no arguments) shows for a product, and
 the log sources an operator can stream from a device (in that dashboard or
 with `thinr device logs`). Today only thinr reads them; they are not the web
 console's dashboards (for those, see the server's `dashboard-sdk` guide and
-`thinr_dashboard_publish`). Both live on the server as product properties,
-so the devices need nothing and other clients could reuse them.
+the `dashboard` action `publish`). Both live on the server as product
+properties (type `product_property`, ids `{"product", "property"}`), so the
+devices need nothing and other clients could reuse them. Each is written
+whole: read it, change it, `resource_update` it with the whole `value`
+(not with `merge`). It is checked before it is saved, and
+`resource_describe` type `product_property` shows both shapes.
 
 Tool names below omit the `thinr_` prefix.
 
@@ -14,16 +18,14 @@ Tool names below omit the `thinr_` prefix.
 
 A metric is a value thinr's dashboard asks every device of the product for,
 and combines across the fleet: free disk, connected clients, service version…
-They live in the `dashboard_metrics` product property; edit them as the
-resource type `product_metric` (parent the product, id the metric's name:
-`resource_list`, `_get`, `_create`, `_update`, `_delete`), not by writing the
-property by hand.
+They live in the `dashboard_metrics` product property, an array of
+metrics with unique names (create the property with the first one).
 
 Fields of a metric:
 
 | Field           | Meaning                                                                                                  |
 | --------------- | -------------------------------------------------------------------------------------------------------- |
-| `name`          | Stable id (letters, digits, `_`, `-`): the resource id                                                   |
+| `name`          | Stable id (letters, digits, `_`, `-`), unique in the array                                               |
 | `label`         | Title in the panel                                                                                       |
 | `resource`      | Product API resource called on each device, usually a product script                                     |
 | `field`         | Dot path to the value in the response (`disk.used_pct`); omit for scalar responses                       |
@@ -33,8 +35,8 @@ Fields of a metric:
 | `unit`          | Display suffix (`%`, `devices`)                                                                          |
 
 Recipe: write a product script that prints the value as JSON (see
-`thinremote-scripts`), check it with `device_resource_call` on one device,
-then register the metric pointing at the script's resource name.
+`thinremote-scripts`), check it with the `device_resource` action `call` on
+one device, then add the metric pointing at the script's resource name.
 
 ## Log sources
 
@@ -42,18 +44,15 @@ A log source is a named shell command the agent streams when an operator
 opens a device's logs in thinr (`journalctl -f`, `docker logs -f app`,
 `tail -F /var/log/nginx/access.log`). They live in the `logs` product
 property; without it, products show a single `system` source running
-journalctl (listed with `fallback: true`). They are the resource type
-`product_log_source`, parent the product, id the source's name.
+journalctl. Its value is `{"sources": [...], "default"?: "<name>"}`.
 
-- `resource_create`: a source by `name` (≤ 32 chars, letters, digits,
-  `_`, `-`; up to 32 sources). The `command` is stored and run as is.
-  `default: true` makes it the one shown first (and the one
-  `thinr device logs` uses without `--source`).
+- A source has a `name` (≤ 32 chars, letters, digits, `_`, `-`; unique; up
+  to 32 sources) and a `command`, stored and run as is. `default` names the
+  one shown first (and the one `thinr device logs` uses without
+  `--source`).
 - Structured rendering: add a `preset` (`resource_describe` type
-  `product_log_source` lists them:
-  journalctl, spdlog, nginx…) or your own `pattern`, a regex with named
-  groups `time`, `level` and `msg`. With a `level` group, operators can filter
-  by severity. `preset` and `pattern` are mutually exclusive.
-- `resource_update` with `{"default": true}` picks the default;
-  `resource_delete` drops a source (removing the last one deletes the
-  property, back to the fallback).
+  `product_property` lists them: journalctl, spdlog, nginx…) or your own
+  `pattern`, a regex with named groups `time`, `level` and `msg`. With a
+  `level` group, operators can filter by severity. `preset` and `pattern`
+  are mutually exclusive.
+- Deleting the property (`resource_delete`) brings back the fallback.

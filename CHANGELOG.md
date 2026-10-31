@@ -10,7 +10,11 @@ positional and named after their noun (`<device>`, `<product>`), and the
 options keep one meaning everywhere (`-j` JSON, `-s` a body field, `-f` one
 field of the answer, `-o` a file, `-y` no questions). Several commands of
 1.5 change form: see the table below. The old forms are gone, not aliased.
-The MCP tools do not change.
+
+The MCP server serves eight tools instead of 24: `thinr_resource_*` reach
+everything by `type`, records are addressed with `ids`, and the shell
+command is the `exec` action of type `device`. The old tool names and the
+`parent`/`id` arguments are gone, not aliased: see the second table below.
 
 ### Added
 
@@ -25,7 +29,15 @@ The MCP tools do not change.
   `thinr device send|overview`, `thinr device resource list|call`,
   `thinr product apply --from`, `thinr product profile api call`,
   `thinr plugin call`; `--search`, `--filter`, `--count` and `--index` on
-  `device list`, `product list` and `bucket list`.
+  `device list`, `product list` and `bucket list`; `thinr doc list|get`.
+- MCP: `resource_describe` shows each type's ids, actions, permissions and
+  ready-to-send examples; `exec` on several devices, playbook runs on
+  several devices and rollouts answer their targets first and run with
+  `confirm: true` (or ask through the client when it supports it);
+  `thinr mcp --read-only` (or `THINR_MCP_READ_ONLY=1`) serves only what
+  reads. The product properties `logs` and `dashboard_metrics` are checked
+  before they are written, and `resource_describe` type `product_property`
+  shows their shape.
 
 ### Changed (breaking)
 
@@ -69,6 +81,23 @@ The MCP tools do not change.
 - The help groups the root commands as Resources, Administration,
   Configuration, Integration and Operations, and the verbs of a noun as
   Records, Data, Actions and Subresources, before thinr's own groups.
+- The MCP tools (the commands keep their forms and `-j` outputs):
+
+| 1.5 tool                                             | 1.6 call                                                                                            |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `thinr_resource_* parent "gw_1" id "/etc/hosts"`      | `thinr_resource_* ids {"device": "gw_1", "path": "/etc/hosts"}`                                     |
+| `thinr_device_exec device` …                          | `thinr_resource_call type "device" action "exec" ids {device} body {command, …}`                    |
+| `thinr_device_exec devices\|product\|group\|all` …     | `thinr_resource_call type "device" action "exec" body {command, devices\|product\|group\|all, …}`     |
+| `type "device_script"` / `"product_script"` id        | ids `{device, script}` / `{product, script}` (body `name` on create)                                |
+| `type "product_playbook"` id                          | ids `{product, playbook}`                                                                           |
+| `type "product_metric"`                               | `type "product_property"` ids `{product, property: "dashboard_metrics"}`, the whole array as value  |
+| `type "product_log_source"`                           | `type "product_property"` ids `{product, property: "logs"}`, `{sources, default}` as value          |
+| `thinr_bucket_data_read` / `_write`                   | `thinr_resource_list` / `_create` `type "bucket_data" ids {bucket}`                                 |
+| `thinr_device_resource_list` / `_call`                | `thinr_resource_list type "device_resource"` / `_call action "call" ids {device, resource}`         |
+| `thinr_storage_file_*`                                | `thinr_resource_* type "storage_file" ids {storage, file}`                                          |
+| `thinr_doc_read`, `thinr_profile_list`                | `thinr_resource_get type "doc" ids {doc}`, `thinr_resource_list type "profile"`                     |
+| `thinr_dashboard_*`, `thinr_plugin_call`, `thinr_product_resource_call`, `thinr_device_data_send`, `thinr_device_overview` | `thinr_resource_call` actions `dashboard` `init\|dev\|publish`, `plugin` `call`, `product_profile_api` `call`, `device` `send`, `device` `overview` |
+
 - Requires `@thinger-io/cli-core` 0.5.0.
 
 ## [1.5.0] - 2026-10-16

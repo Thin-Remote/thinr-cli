@@ -3,23 +3,24 @@
 A script turns an operation (read a sensor, rotate a log, run a backup,
 collect a health report) into a **resource**: something with a name and an
 input/output shape that tools, dashboards and other devices can call. Use one
-instead of `thinr_device_exec` whenever the operation will be repeated.
+instead of the `exec` action whenever the operation will be repeated.
 
 Both kinds are resource types: `resource_list` / `_get` / `_create` /
-`_update` / `_delete` with type `device_script` (parent the device) or
-`product_script` (parent the product), the file name as id.
+`_update` / `_delete` with type `device_script` (ids
+`{"device", "script"}`) or `product_script` (ids `{"product", "script"}`),
+the file name as `ids.script` (or as `name` in the body of a create).
 
 Tool names below omit the `thinr_` prefix.
 
 ## Device scripts or product scripts
 
-|             | Device script                         | Product script                                      |
-| ----------- | ------------------------------------- | --------------------------------------------------- |
-| Lives in    | the device: `<agent base>/scripts/`   | the product's file storage: `scripts/`              |
-| Reaches     | that device                           | every device of the product, current and future     |
-| Changing it | one write per device                  | one write, effective on the next call everywhere    |
-| Type        | `device_script`, parent the device    | `product_script`, parent the product                |
-| Called with | `device_resource_call` on that device | `device_resource_call` on any device of the product |
+|             | Device script                               | Product script                                        |
+| ----------- | ------------------------------------------- | ----------------------------------------------------- |
+| Lives in    | the device: `<agent base>/scripts/`         | the product's file storage: `scripts/`                |
+| Reaches     | that device                                 | every device of the product, current and future       |
+| Changing it | one write per device                        | one write, effective on the next call everywhere      |
+| Type        | `device_script`, ids `{"device", "script"}` | `product_script`, ids `{"product", "script"}`         |
+| Called with | `device_resource` `call` on that device     | `device_resource` `call` on any device of the product |
 
 Prefer **product scripts** for fleets: the code is downloaded on each call,
 so there is nothing to deploy and no drift between devices. Use a device
