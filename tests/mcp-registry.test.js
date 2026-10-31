@@ -97,6 +97,14 @@ describe('mcp registry', () => {
         }
     });
 
+    // Clients that load every tool up front pay for tools/list in every
+    // conversation. thinr serves more types and actions than thinger (whose
+    // budget is 20,000), so its cap is a bit higher.
+    it('fit in the tools/list budget', () => {
+        const listed = JSON.stringify({ tools: tools.map(({ handler: _h, ...t }) => t) });
+        assert.ok(listed.length < 24_000, `tools/list is ${listed.length} characters`);
+    });
+
     it('descriptions are fully expanded and name only thinr tools', () => {
         const text = JSON.stringify(tools.map(({ handler: _h, ...t }) => t));
         assert.doesNotMatch(text, /\{(tool|family):/);
