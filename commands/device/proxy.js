@@ -7,7 +7,10 @@ export function registerProxyCommands(device) {
         .command('tcp <device> [target]')
         .helpGroup('Remote access:')
         .description('Create a TCP proxy (no TLS). Default target: 22.')
-        .option('-p, --port <port>', 'Local port to use (default: random)')
+        .option(
+            '-p, --port <port>',
+            'Port of the relay on the server (default: random, 50000-51000)',
+        )
         .action((deviceId, target, opts) =>
             runInteractive(() => {
                 ensureConfigured();
@@ -19,7 +22,10 @@ export function registerProxyCommands(device) {
         .command('tls <device> [target]')
         .helpGroup('Remote access:')
         .description('Create a TLS proxy. Default target: 443.')
-        .option('-p, --port <port>', 'Local port to use (default: random)')
+        .option(
+            '-p, --port <port>',
+            'Port of the relay on the server (default: random, 50000-51000)',
+        )
         .action((deviceId, target, opts) =>
             runInteractive(() => {
                 ensureConfigured();
@@ -31,7 +37,10 @@ export function registerProxyCommands(device) {
         .command('http <device> [target]')
         .helpGroup('Remote access:')
         .description('Create an HTTP proxy. Default target: 80.')
-        .option('-p, --port <port>', 'Local port to use (default: random)')
+        .option(
+            '-p, --port <port>',
+            'Port of the relay on the server (default: random, 50000-51000)',
+        )
         .option('--no-open', 'Do not open the browser')
         .action((deviceId, target, opts) =>
             runInteractive(() => {
