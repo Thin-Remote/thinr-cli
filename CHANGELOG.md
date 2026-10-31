@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.1] - 2026-10-31
+
+### Fixed
+
+- `thinr device tcp|tls|http -p` is described as what it is: the port
+  of the relay on the server (random between 50000 and 51000 by default),
+  not a local port.
+- From `@thinger-io/cli-core` 0.5.1: the browser login on a server that does
+  not know the CLI's OAuth client says so and offers username and password
+  or a token, and the host `update_settings` action is described as the
+  merge the server does.
+- Requires `@thinger-io/cli-core` 0.5.1.
+
 ## [1.6.0] - 2026-10-27
 
 Every command follows one grammar, the one of `@thinger-io/cli-core` 0.5.0
