@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.6.2] - 2026-11-13
+
+### Added
+
+- From `@thinger-io/cli-core` 0.5.3: profiles that act as another account
+  with the session of an admin profile (`thinr profile add monitoring
+  --credentials-from <admin profile> --impersonate monitoring -d "…"`),
+  which only reach that account; profile descriptions (`-d`, `profile
+  update`), shown in `profile list` and the MCP profile list.
+
+### Fixed
+
+- From `@thinger-io/cli-core` 0.5.3: a renewal of the session no longer
+  loses it when several thinr processes renew at once, the process exits
+  or gets a signal meanwhile, or the default profile changes; a cancelled
+  login leaves the profile as it was.
+- `thinr agent install` refuses a profile acting as another account rather
+  than handing out the admin session; the dashboard event stream renews
+  with the token it was refused.
+- The MCP instructions ask to read a profile's description before using
+  one other than the default.
+- Requires `@thinger-io/cli-core` 0.5.3.
+
 ## [1.6.1] - 2026-10-31
 
 ### Fixed
