@@ -209,6 +209,14 @@ export function useFleetMonitoringStream(devices) {
             setEvents((cur) => [ev, ...cur].slice(0, MAX_EVENTS));
         });
 
+        // The stream gave up (session over): say so in the event log
+        // rather than showing a fleet that silently stopped updating.
+        const offStopped = eventStream.on('stream_stopped', (frame) => {
+            setStatus('stopped');
+            const ev = { t: tsStr(), kind: 'leave', dev: 'live updates', msg: frame.message };
+            setEvents((cur) => [ev, ...cur].slice(0, MAX_EVENTS));
+        });
+
         eventStream.subscribe({ event: 'bucket_write', filters: { bucket: BUCKET } });
         eventStream.subscribe({ event: 'device_state_change' });
         // Surface a coarse status — the singleton handles the
@@ -219,6 +227,7 @@ export function useFleetMonitoringStream(devices) {
         return () => {
             offBucket();
             offState();
+            offStopped();
             if (flushTimerRef.current) {
                 clearTimeout(flushTimerRef.current);
                 flushTimerRef.current = null;
