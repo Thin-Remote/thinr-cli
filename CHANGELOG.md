@@ -1,6 +1,16 @@
 # Changelog
 
-## [Unreleased]
+## [1.6.3] - 2026-11-13
+
+### Added
+
+- From `@thinger-io/cli-core` 0.5.4: the browser login without a terminal,
+  in two steps (`thinr login --oauth --no-wait`, then `thinr --profile
+  <name> login --wait`), and the MCP `profile` type with `create`,
+  `update` and the actions `login` and `status`, so an agent can set up a
+  profile without asking for a password. A password login asks for the
+  authenticator code (or a backup code) on accounts with a second factor;
+  a token login reads the account from the token.
 
 ### Fixed
 
