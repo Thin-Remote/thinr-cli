@@ -5,6 +5,7 @@ import './setup.js';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import { WebSocketServer } from 'ws';
 import {
     deleteConfig,
     getProfile,
@@ -21,6 +22,7 @@ function jwt(seconds) {
 }
 
 let server;
+const sockets = new Set();
 let baseURL;
 /** What the server does, and saw. */
 let srv;
@@ -47,22 +49,36 @@ before(async () => {
             res.end(JSON.stringify(ok ? { ok: true } : { error: { message: 'expired' } }));
         });
     });
-    // Every handshake of the event stream is refused: the session expired.
-    server.on('upgrade', (req, socket) => {
+    // The event stream: a handshake with the session the server issued last
+    // is taken, any other refused as expired.
+    const wss = new WebSocketServer({ noServer: true });
+    server.on('upgrade', (req, socket, head) => {
         srv.handshakes++;
-        socket.end('HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n');
+        const token = new URL(req.url ?? '', 'http://x').searchParams.get('authorization');
+        if (token !== srv.fresh) {
+            // Answered and kept open, as a server with keep-alive does: the
+            // client must end it.
+            socket.write('HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n');
+            sockets.add(socket);
+            return;
+        }
+        wss.handleUpgrade(req, socket, head, (ws) => {
+            srv.opened++;
+            ws.on('message', () => {});
+        });
     });
     await new Promise((r) => server.listen(0, '127.0.0.1', () => r(undefined)));
     baseURL = `http://127.0.0.1:${server.address().port}`;
 });
 
 after(() => {
+    for (const socket of sockets) socket.destroy();
     server.closeAllConnections();
     server.close();
 });
 
 beforeEach(() => {
-    srv = { requests: [], handshakes: 0, renew: true, fresh: jwt(7200) };
+    srv = { requests: [], handshakes: 0, opened: 0, renew: true, fresh: jwt(7200) };
     deleteConfig();
     setActiveProfile('p');
     writeConfig({
@@ -88,6 +104,19 @@ describe('the event stream', () => {
         assert.equal(eventStream.reconnectTimer, null);
         eventStream.disconnect();
     });
+
+    it(
+        'opens again with the session renewed after a refused handshake',
+        { timeout: 10_000 },
+        async () => {
+            eventStream.connect();
+            for (let i = 0; i < 100 && !srv.opened; i++)
+                await new Promise((r) => setTimeout(r, 50));
+            assert.equal(srv.opened, 1, `handshakes: ${srv.handshakes}`);
+            assert.equal(getProfile('p').refresh_token, 'R-next');
+            eventStream.disconnect();
+        },
+    );
 });
 
 describe('a file upload', () => {

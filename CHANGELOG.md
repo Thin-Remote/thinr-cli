@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- The dashboard's live updates come back after the session is renewed: a
+  refused handshake is ended, so the stream reconnects with the new
+  session. When the session cannot be renewed the stream stops, and the
+  event log says so, instead of a fleet that silently stops updating.
+- `device push` (and every file upload) renews a session about to expire
+  before sending, rather than failing after a 401 with a body it cannot
+  send again; a buffer refused with a session renewed meanwhile is sent
+  once more.
+
 ## [1.6.2] - 2026-11-13
 
 ### Added
